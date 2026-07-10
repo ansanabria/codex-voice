@@ -4,7 +4,12 @@ set -euo pipefail
 
 HOTKEY="${1:-<Control><Super>space}"
 GITHUB_REPOSITORY="${CODEX_VOICE_GITHUB_REPOSITORY:-ansanabria/codex-voice}"
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
+if [[ -n "$SCRIPT_SOURCE" && "$SCRIPT_SOURCE" != /dev/stdin && "$SCRIPT_SOURCE" != /dev/fd/* ]]; then
+  ROOT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
+else
+  ROOT_DIR="$PWD"
+fi
 TEMP_ROOT=""
 # `curl | bash` has no checkout beside the script. Fetch a source snapshot for
 # the small Rust/GTK/extension pieces; the Electron application itself remains
