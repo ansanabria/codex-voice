@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-export type SettingsKey = "enabled" | "keybinding" | "pill-background-color" | "pill-accent-color" | "language";
-export type SettingsDocument = {
+type SettingsKey = "enabled" | "keybinding" | "pill-background-color" | "pill-accent-color" | "language";
+type SettingsDocument = {
   schemaVersion: 1;
   enabled: boolean;
   keybinding: string;
@@ -10,7 +10,7 @@ export type SettingsDocument = {
   language: string;
   overrides: { language: string | null };
 };
-export type AppInfo = {
+type AppInfo = {
   version: string;
   appVersion: string;
   cli: string;

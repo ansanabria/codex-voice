@@ -51,7 +51,7 @@ function createWindow() {
     title: "Codex Voice Settings",
     backgroundColor: "#151a17",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false
