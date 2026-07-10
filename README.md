@@ -1,128 +1,68 @@
 # codex-voice
 
-Push-to-talk voice dictation for Linux using your ChatGPT/OpenAI subscription.
+Push-to-talk Linux dictation using `codex-asr` and an existing Codex login.
 
-codex-voice reuses the OAuth token from the [Codex CLI](https://github.com/openai/codex) to send audio to the same transcription endpoint that the Codex desktop app uses — no API key, no separate billing. Press a hotkey, speak, and the transcription is typed directly at your cursor.
+## Supported platforms
 
-Built for GNOME Wayland on Ubuntu. Inspired by [Handy](https://github.com/cjpais/Handy)'s recording overlay design.
+The release contract is Ubuntu 24.04 LTS with GNOME Shell 46 and Ubuntu 26.04 LTS with GNOME Shell 50, on either Wayland or X11. Other Ubuntu releases, GNOME 47–49, Ubuntu 22.04, and derivatives are not advertised as supported.
 
-## How it works
-
-```
-Ctrl+Super+Space → arecord captures mic audio
-                  → overlay pill appears with animated waveform
-Ctrl+Super+Space → audio uploaded to chatgpt.com/backend-api/transcribe
-                  → overlay switches to "Transcribing…"
-                  → transcription typed at cursor via ydotool
-                  → text also copied to clipboard
-```
-
-Authentication is handled by [codex-asr](https://github.com/Wangnov/codex-asr), which reads `~/.codex/auth.json` (your Codex CLI login) and sends the audio with the correct OAuth bearer token and account ID headers.
-
-## Requirements
-
-- **ChatGPT Plus/Pro subscription** with [Codex CLI](https://github.com/openai/codex) installed and authenticated (`codex login`)
-- **GNOME Wayland** (tested on Ubuntu 26.04, GNOME Shell 50)
-- **Linux x86_64** (codex-asr provides prebuilt binaries)
-
-### System packages
-
-```bash
-sudo apt install alsa-utils wl-clipboard ydotool python3-gi python3-gi-cairo libnotify-bin
-```
-
-| Package | Purpose |
-|---|---|
-| `alsa-utils` | `arecord` for microphone capture |
-| `wl-clipboard` | `wl-copy` for clipboard support |
-| `ydotool` | Types transcription at cursor (works on GNOME Wayland) |
-| `python3-gi` | GTK3 Python bindings |
-| `python3-gi-cairo` | Cairo bridge for transparent overlay window |
-| `libnotify-bin` | `notify-send` (optional, for error notifications) |
-
-### codex-asr
-
-Installed automatically by the install script, or manually:
-
-```bash
-curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/wangnov/codex-asr/releases/latest/download/codex-asr-installer.sh \
-  | sh
-```
+On supported GNOME versions, the Shell extension supplies the top-bar menu, global shortcut, and native Wayland/X11 pill. The CLI retains the GTK3/XWayland pill as an extension-free fallback.
 
 ## Install
 
-```bash
-git clone https://github.com/andy-spike/codex-voice.git
-cd codex-voice
-./scripts/install.sh
-```
-
-The install script will:
-1. Check all dependencies
-2. Install codex-asr if missing
-3. Copy the toggle script to `~/.local/bin/codex-voice`
-4. Configure a GNOME custom shortcut (`Ctrl+Super+Space`)
-
-To use a different hotkey:
+Install everything—CLI, settings AppImage, schema, GTK fallback, desktop entry, and GNOME extension—with one command:
 
 ```bash
-./scripts/install.sh "<Super><Shift>D"
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://raw.githubusercontent.com/ansanabria/codex-voice/master/install.sh | bash
 ```
 
-## Usage
+From a checkout, run the same installer directly:
 
-Press `Ctrl+Super+Space`:
-1. **First press** — recording starts, overlay pill appears at bottom-center with green mic icon and animated waveform bars
-2. **Second press** — recording stops, pill switches to "Transcribing…", then transcription is typed at your cursor and copied to clipboard
-
-### Configuration
-
-| Environment variable | Default | Description |
-|---|---|---|
-| `CODEX_VOICE_LANG` | `en` | Language hint for transcription (e.g. `es`, `zh`) |
-
-Add to `~/.zshrc` or `~/.bashrc`:
 ```bash
-export CODEX_VOICE_LANG=es
+./install.sh
 ```
+
+If a settings AppImage has already been built locally, the installer picks it up from `settings/dist/` or `settings/release/`. A specific artifact can be supplied with `CODEX_VOICE_SETTINGS_APPIMAGE=/path/to/file.AppImage ./install.sh`.
+
+The installer builds the Rust CLI, compiles the private GSettings schema, installs a local AppImage or downloads a version-pinned one with SHA-256 verification, then enables the extension when the host is in the support contract. On a supported Ubuntu release with an unexpected Shell, use `CODEX_VOICE_EXTENSION_OVERRIDE=1` only if you explicitly accept extension risk. Unsupported hosts still receive the CLI with a warning.
+
+The settings AppImage is installed at `~/.local/share/codex-voice/codex-voice-settings.AppImage`; its `~/.local/bin/codex-voice-settings` wrapper does not disable Electron's sandbox.
+
+## Commands
+
+```text
+codex-voice                 # toggle (backward compatible)
+codex-voice --toggle
+codex-voice --start | --stop | --cancel | --status | --settings
+codex-voice settings get
+codex-voice settings set language auto
+```
+
+Settings writes return the complete JSON document. The shared schema is installed in `~/.local/share/codex-voice/schemas/`.
+
+## Language detection
+
+Language defaults to `auto`. In that mode `codex-voice` intentionally omits `--language` when running `codex-asr`, allowing the upstream service to infer it. An explicit, lower-cased BCP-47-like code such as `en`, `es`, or `zh-hant` is passed as a hint.
+
+`CODEX_VOICE_LANG` overrides the saved value. `CODEX_VOICE_LANG=auto` and an empty value select automatic detection. The settings app displays the active override.
+
+Automatic detection is provided by an undocumented upstream endpoint. Its accuracy and supported language set are not a stable API.
+
+## Development
+
+```bash
+cargo test
+cd settings && npm install && npm run build
+```
+
+The Electron renderer is React + TypeScript + Vite + Tailwind CSS v4. Its preload bridge exposes only typed settings operations, and the main process invokes the Rust CLI with fixed argument arrays rather than a shell.
 
 ## Uninstall
 
 ```bash
-./scripts/uninstall.sh
+./scripts/uninstall.sh          # preserve saved preferences
+./scripts/uninstall.sh --purge  # also reset saved preferences
 ```
 
-Removes the script and GNOME shortcut. codex-asr and system packages are left untouched.
-
-## Project structure
-
-```
-codex-voice/
-├── src/
-│   └── overlay.py        # GTK3 recording overlay (waveform pill)
-├── scripts/
-│   ├── codex-voice       # Toggle script (start/stop/transcribe/type)
-│   ├── install.sh        # Dependency check + GNOME shortcut setup
-│   └── uninstall.sh      # Remove scripts + shortcut
-├── assets/               # Screenshots, demo gifs
-├── LICENSE
-└── README.md
-```
-
-## Caveats
-
-- The `chatgpt.com/backend-api/transcribe` endpoint is undocumented and reverse-engineered from Codex Desktop behavior. It may stop working if OpenAI changes the backend.
-- Cloudflare occasionally returns `403` challenges to non-browser requests. If transcription starts failing, run `codex login` to refresh your OAuth token.
-- GNOME Wayland does not support arbitrary window positioning via `move()`. The overlay position may vary depending on compositor behavior.
-- `ydotool` types via kernel uinput, which bypasses Wayland's virtual-keyboard restrictions but requires the `ydotoold` daemon to be running.
-
-## Credits
-
-- [codex-asr](https://github.com/Wangnov/codex-asr) — Rust CLI that reuses Codex ChatGPT auth for transcription
-- [Handy](https://github.com/cjpais/Handy) — Overlay design inspiration (waveform bars, pill shape, recording states)
-- [Codex CLI](https://github.com/openai/codex) — OAuth token source
-
-## License
-
-MIT
+Neither variant removes system packages or `codex-asr`.

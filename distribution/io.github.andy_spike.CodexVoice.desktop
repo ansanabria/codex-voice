@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Codex Voice Settings
+Comment=Configure Codex Voice dictation
+Exec=codex-voice-settings
+Icon=codex-voice
+Terminal=false
+Categories=Utility;Settings;
+StartupWMClass=codex-voice-settings

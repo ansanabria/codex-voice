@@ -1,0 +1,13 @@
+appId: io.github.andy_spike.CodexVoice.Settings
+productName: Codex Voice Settings
+linux:
+  target:
+    - AppImage
+  category: Utility
+  desktop:
+    StartupWMClass: codex-voice-settings
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+asar: true

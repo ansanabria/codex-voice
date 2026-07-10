@@ -1,44 +1,70 @@
 #!/usr/bin/env python3
-"""codex-voice overlay — recording pill with live waveform.
+"""codex-voice overlay — recording pill with a live waveform.
 
-A transparent GTK3 window showing a Handy-style recording pill at the
-bottom-center of the screen.  Displays animated waveform bars while
-recording and switches to a pulsing "Transcribing…" label on SIGUSR1.
+The overlay reads levels from the WAV file that the main recorder is already
+writing.  It never opens the microphone itself, so it cannot contend with the
+actual recording process.
 """
-import gi
-gi.require_version('Gtk', '3.0')
-gi.require_foreign('cairo')
-from gi.repository import Gtk, Gdk, GLib
-import cairo
-import signal
-import subprocess
-import struct
-import random
+import argparse
+import math
 import os
-import fcntl
+import signal
+import struct
+import time
 
-signal.signal(signal.SIGINT, signal.SIG_DFL)
-signal.signal(signal.SIGTERM, signal.SIG_DFL)
+import gi
 
-PILL_W = 172
-PILL_H = 36
-MARGIN_BOTTOM = 40
-NUM_BARS = 9
-BAR_W = 6
+gi.require_version('Gtk', '3.0')
+gi.require_version('Gdk', '3.0')
+gi.require_version('GLibUnix', '2.0')
+gi.require_foreign('cairo')
+from gi.repository import Gdk, GLib, GLibUnix, Gtk
+import cairo
+
+
+PILL_W = 176
+PILL_H = 38
+MARGIN_BOTTOM = 36
+NUM_BARS = 11
+BAR_W = 4
 BAR_GAP = 3
-BAR_MAX_H = 20
+BAR_MAX_H = 22
 BAR_MIN_H = 4
 LEVEL_POLL_MS = 50
+WAV_HEADER_SIZE = 44
+LEVEL_BYTES = 4096
 
-COLOR_ICON = '#30D158'
-COLOR_BARS = (0.82, 0.98, 0.88, 1.0)
-COLOR_CANCEL = '#30D158'
+COLOR_ICON = '#32D870'
+COLOR_BARS = (0.58, 0.96, 0.70)
+COLOR_CANCEL = '#8E9692'
+
+
+def _normalize_color(value, fallback):
+    """Return a CSS #rrggbbaa color; invalid persisted values stay harmless."""
+    value = (value or '').strip().lower()
+    if value.startswith('#'):
+        value = value[1:]
+    if len(value) == 3 and all(char in '0123456789abcdef' for char in value):
+        value = ''.join(char * 2 for char in value) + 'ff'
+    elif len(value) == 4 and all(char in '0123456789abcdef' for char in value):
+        value = ''.join(char * 2 for char in value)
+    elif len(value) == 6 and all(char in '0123456789abcdef' for char in value):
+        value += 'ff'
+    elif len(value) != 8 or not all(char in '0123456789abcdef' for char in value):
+        return fallback
+    return '#' + value
+
+
+def _hex_to_rgb(color):
+    color = _normalize_color(color, '#32d870')[1:7]
+    return tuple(int(color[index:index + 2], 16) / 255.0
+                 for index in range(0, 6, 2))
 
 
 class Waveform(Gtk.DrawingArea):
-    """DrawingArea that renders animated waveform bars."""
+    """Render audio levels as a row of softly rounded capsules."""
 
-    def __init__(self, num_bars, bar_w, bar_gap, max_h, min_h):
+    def __init__(self, num_bars, bar_w, bar_gap, max_h, min_h, color):
         super().__init__()
         self.num_bars = num_bars
         self.bar_w = bar_w
@@ -46,8 +72,9 @@ class Waveform(Gtk.DrawingArea):
         self.max_h = max_h
         self.min_h = min_h
         self.levels = [0.0] * num_bars
-        self.set_size_request(
-            num_bars * bar_w + (num_bars - 1) * bar_gap, max_h)
+        self.color = color
+        width = num_bars * bar_w + (num_bars - 1) * bar_gap
+        self.set_size_request(width, max_h)
         self.set_valign(Gtk.Align.CENTER)
         self.set_halign(Gtk.Align.CENTER)
         self.set_hexpand(True)
@@ -57,31 +84,61 @@ class Waveform(Gtk.DrawingArea):
         self.levels = levels
         self.queue_draw()
 
-    def _on_draw(self, _w, cr):
-        for i, level in enumerate(self.levels):
-            h = self.min_h + level * (self.max_h - self.min_h)
-            h = max(self.min_h, min(self.max_h, h))
-            x = i * (self.bar_w + self.bar_gap)
-            y = (self.max_h - h) / 2
-            cr.set_source_rgba(*COLOR_BARS)
-            cr.rectangle(x, y, self.bar_w, h)
-            cr.fill()
+    def _on_draw(self, _widget, cr):
+        center_y = self.get_allocated_height() / 2.0
+        cr.set_line_cap(cairo.LINE_CAP_ROUND)
+        cr.set_line_width(self.bar_w)
+
+        for index, level in enumerate(self.levels):
+            height = self.min_h + level * (self.max_h - self.min_h)
+            height = max(self.min_h, min(self.max_h, height))
+            x = index * (self.bar_w + self.bar_gap) + self.bar_w / 2.0
+            half_line = max(0.0, (height - self.bar_w) / 2.0)
+            alpha = 0.55 + level * 0.45
+            cr.set_source_rgba(*self.color, alpha)
+            cr.move_to(x, center_y - half_line)
+            cr.line_to(x, center_y + half_line)
+            cr.stroke()
         return False
 
 
 class Overlay(Gtk.Window):
-    """Recording overlay window with live waveform and transcribing state."""
+    """Bottom-center recording overlay with recording/transcribing states."""
 
-    def __init__(self):
+    def __init__(self, audio_file=None, recorder_pid_file=None,
+                 overlay_pid_file=None, transcriber_pid_file=None,
+                 cancel_file=None, background_color='#0e1110eb',
+                 accent_color='#32d870', state_file=None):
+        # A utility toplevel can receive Esc during transcription. The launcher
+        # uses XWayland so its explicit bottom-center placement is still honored.
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
+        self.audio_file = audio_file
+        self.recorder_pid_file = recorder_pid_file
+        self.overlay_pid_file = overlay_pid_file
+        self.transcriber_pid_file = transcriber_pid_file
+        self.cancel_file = cancel_file
+        self.state_file = state_file
+        self.background_color = _normalize_color(background_color, '#0e1110eb')
+        self.accent_color = _normalize_color(accent_color, '#32d870')
+        self.state = 'recording'
+        self._level_history = [0.0] * ((NUM_BARS // 2) + 1)
+        self._smoothed_level = 0.0
+        self._pulse_up = False
+
+        self.set_title('Codex Voice')
         self.set_decorated(False)
         self.set_app_paintable(True)
         self.set_resizable(False)
         self.set_skip_taskbar_hint(True)
         self.set_skip_pager_hint(True)
-        self.set_type_hint(Gdk.WindowTypeHint.NOTIFICATION)
+        self.set_type_hint(Gdk.WindowTypeHint.UTILITY)
         self.set_keep_above(True)
-        self.set_accept_focus(False)
+        # The overlay takes temporary focus while visible so Esc can always
+        # cancel, both during recording and transcription.
+        self.set_accept_focus(True)
+        self.set_focus_on_map(False)
+        self.set_can_focus(True)
+        self.set_gravity(Gdk.Gravity.NORTH_WEST)
         self.stick()
         self.set_size_request(PILL_W, PILL_H)
 
@@ -95,15 +152,16 @@ class Overlay(Gtk.Window):
             background-color: transparent;
         }}
         .pill {{
-            background-color: rgba(0, 0, 0, 0.80);
-            border-radius: 18px;
-            padding: 6px;
+            background-color: {self.background_color};
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 19px;
+            padding: 6px 8px;
         }}
         .mic-icon {{
-            color: {COLOR_ICON};
+            color: {self.accent_color};
         }}
         .transcribing-label {{
-            color: #ffffff;
+            color: #f4f7f5;
             font-size: 12px;
             font-family: -apple-system, "Segoe UI", "Ubuntu Sans", sans-serif;
         }}
@@ -113,38 +171,39 @@ class Overlay(Gtk.Window):
             padding: 0;
             margin: 0;
             border: none;
-            border-radius: 50%;
+            border-radius: 12px;
             background: transparent;
             color: {COLOR_CANCEL};
-            font-size: 16px;
+            font-size: 14px;
+        }}
+        .cancel-btn:hover {{
+            background: rgba(255, 255, 255, 0.10);
+            color: #ffffff;
         }}
         """.encode()
         provider = Gtk.CssProvider()
         provider.load_from_data(css)
         Gtk.StyleContext.add_provider_for_screen(
-            screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+            screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
-        self.state = "recording"
         self._build_ui()
-
-        self.connect('realize', self._on_realize)
-        self.connect('destroy', Gtk.main_quit)
-
-        self._smoothed = [0.0] * NUM_BARS
-        self._arecord_proc = None
-        self._pulse_up = False
+        self.connect('map-event', self._on_map)
+        self.connect('key-press-event', self._on_key_press)
+        self.connect('destroy', self._on_destroy)
 
         self.show_all()
         self._position_window()
 
-        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1,
-                             self._on_transcribing_signal)
-
-        self._start_level_monitor()
+        GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1,
+                            self._on_transcribing_signal)
+        GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM,
+                            self._on_quit_signal)
+        GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT,
+                            self._on_quit_signal)
         GLib.timeout_add(LEVEL_POLL_MS, self._poll_levels)
 
     def _build_ui(self):
-        pill = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        pill = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=7)
         pill.get_style_context().add_class('pill')
         pill.set_valign(Gtk.Align.CENTER)
         pill.set_size_request(PILL_W, PILL_H)
@@ -155,117 +214,250 @@ class Overlay(Gtk.Window):
         pill.pack_start(self.mic_icon, False, False, 0)
 
         self.waveform = Waveform(
-            NUM_BARS, BAR_W, BAR_GAP, BAR_MAX_H, BAR_MIN_H)
+            NUM_BARS, BAR_W, BAR_GAP, BAR_MAX_H, BAR_MIN_H,
+            _hex_to_rgb(self.accent_color))
         pill.pack_start(self.waveform, True, True, 0)
 
-        self.transcribing_label = Gtk.Label(label="Transcribing\u2026")
+        self.transcribing_label = Gtk.Label(label='Transcribing\u2026')
         self.transcribing_label.get_style_context().add_class(
             'transcribing-label')
         self.transcribing_label.set_no_show_all(True)
         pill.pack_start(self.transcribing_label, True, True, 0)
 
-        cancel = Gtk.Button(label="\u2715")
+        cancel = Gtk.Button(label='\u00d7')
+        cancel.set_tooltip_text('Cancel')
         cancel.get_style_context().add_class('cancel-btn')
         cancel.set_relief(Gtk.ReliefStyle.NONE)
-        cancel.connect('clicked', lambda _: Gtk.main_quit())
+        cancel.connect('clicked', self._cancel)
         pill.pack_start(cancel, False, False, 0)
 
         self.add(pill)
 
-    def _on_realize(self, _w):
+    def _on_map(self, _widget, _event):
         self._position_window()
+        self._focus_for_cancel()
+        # Mutter may ignore activation requests made in the map callback itself;
+        # retry after it has registered the new XWayland surface.
+        GLib.timeout_add(100, self._focus_for_cancel)
+        GLib.timeout_add(300, self._focus_for_cancel)
+        # Some X11 window managers apply their final placement just after map.
+        GLib.timeout_add(100, self._position_window)
+        return False
+
+    def _focus_for_cancel(self):
+        if self.state == 'cancelled':
+            return GLib.SOURCE_REMOVE
+        gdk_window = self.get_window()
+        if gdk_window:
+            gdk_window.focus(Gdk.CURRENT_TIME)
+        self.present_with_time(Gdk.CURRENT_TIME)
+        self.grab_focus()
+        return GLib.SOURCE_REMOVE
 
     def _position_window(self):
-        screen = self.get_screen()
-        mon = screen.get_primary_monitor()
-        if mon < 0:
-            mon = 0
-        geo = screen.get_monitor_geometry(mon)
-        x = geo.x + (geo.width - PILL_W) // 2
-        y = geo.y + geo.height - PILL_H - MARGIN_BOTTOM
+        display = self.get_display()
+        monitor = display.get_primary_monitor() or display.get_monitor(0)
+        if monitor is None:
+            return False
+        workarea = monitor.get_workarea()
+        width = max(PILL_W, self.get_allocated_width())
+        height = max(PILL_H, self.get_allocated_height())
+        x = workarea.x + (workarea.width - width) // 2
+        y = workarea.y + workarea.height - height - MARGIN_BOTTOM
         self.move(x, y)
         return False
 
-    def _start_level_monitor(self):
+    def _read_audio_level(self):
+        if not self.audio_file:
+            return 0.0
         try:
-            self._arecord_proc = subprocess.Popen(
-                ["arecord", "-q", "-f", "S16_LE", "-r", "8000",
-                 "-c", "1", "-t", "raw"],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            fd = self._arecord_proc.stdout.fileno()
-            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-            fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-        except Exception:
-            self._arecord_proc = None
+            size = os.path.getsize(self.audio_file)
+            if size <= WAV_HEADER_SIZE:
+                return 0.0
+            start = max(WAV_HEADER_SIZE, size - LEVEL_BYTES)
+            if start % 2:
+                start += 1
+            with open(self.audio_file, 'rb', buffering=0) as stream:
+                stream.seek(start)
+                data = stream.read(size - start)
+        except (FileNotFoundError, PermissionError, OSError):
+            return 0.0
+
+        sample_count = len(data) // 2
+        if not sample_count:
+            return 0.0
+        samples = struct.unpack(f'<{sample_count}h', data[:sample_count * 2])
+        rms = math.sqrt(sum(sample * sample for sample in samples) /
+                        sample_count) / 32768.0
+        if rms <= 0.0:
+            return 0.0
+
+        # Map roughly -52 dB (quiet room) through -12 dB (loud speech) to 0..1.
+        decibels = 20.0 * math.log10(rms)
+        return max(0.0, min(1.0, (decibels + 52.0) / 40.0))
 
     def _poll_levels(self):
-        if self.state != "recording":
+        if self.state != 'recording':
             return False
 
-        peak = 0.0
-        if self._arecord_proc and self._arecord_proc.stdout:
-            try:
-                data = os.read(self._arecord_proc.stdout.fileno(), 3200)
-                if data:
-                    n = len(data) // 2
-                    vals = struct.unpack(f'<{n}h', data[:n * 2])
-                    peak = max(abs(v) for v in vals) / 32768.0
-            except (BlockingIOError, OSError):
-                pass
-            except Exception:
-                pass
+        target = self._read_audio_level()
+        attack = 0.55 if target > self._smoothed_level else 0.22
+        self._smoothed_level += (target - self._smoothed_level) * attack
+        self._level_history.insert(0, self._smoothed_level)
+        self._level_history.pop()
 
-        for i in range(NUM_BARS):
-            if peak > 0.005:
-                center = (NUM_BARS - 1) / 2.0
-                dist = abs(i - center) / center if center > 0 else 0
-                decay = 1.0 - dist * 0.35
-                target = peak * decay * (0.6 + random.random() * 0.4)
-                target = min(1.0, target * 3.0)
-            else:
-                target = 0.0
-            self._smoothed[i] = self._smoothed[i] * 0.6 + target * 0.4
-
-        self.waveform.set_levels(self._smoothed)
+        center = NUM_BARS // 2
+        levels = []
+        for index in range(NUM_BARS):
+            distance = abs(index - center)
+            trail = self._level_history[distance]
+            levels.append(trail * (1.0 - distance * 0.035))
+        self.waveform.set_levels(levels)
         return True
 
     def _on_transcribing_signal(self):
-        self.state = "transcribing"
+        if self.state != 'recording':
+            return GLib.SOURCE_CONTINUE
+        self.state = 'transcribing'
         GLib.idle_add(self._switch_to_transcribing)
-        return False
+        return GLib.SOURCE_CONTINUE
 
     def _switch_to_transcribing(self):
         self.waveform.hide()
         self.mic_icon.hide()
+        self.transcribing_label.set_opacity(1.0)
         self.transcribing_label.show()
-
-        if self._arecord_proc:
-            self._arecord_proc.terminate()
-            try:
-                self._arecord_proc.wait(timeout=1)
-            except Exception:
-                self._arecord_proc.kill()
-            self._arecord_proc = None
-
-        GLib.timeout_add(400, self._pulse_label)
-        return False
+        self._focus_for_cancel()
+        GLib.idle_add(self._position_window)
+        GLib.timeout_add(60, self._pulse_label)
+        return GLib.SOURCE_REMOVE
 
     def _pulse_label(self):
-        if self.state != "transcribing":
+        if self.state != 'transcribing':
             return False
-        op = self.transcribing_label.get_opacity()
+        opacity = self.transcribing_label.get_opacity()
+        step = 0.035
         if self._pulse_up:
-            op = min(1.0, op + 0.1)
-            if op >= 1.0:
+            opacity = min(1.0, opacity + step)
+            if opacity >= 1.0:
                 self._pulse_up = False
         else:
-            op = max(0.5, op - 0.1)
-            if op <= 0.5:
+            opacity = max(0.55, opacity - step)
+            if opacity <= 0.55:
                 self._pulse_up = True
-        self.transcribing_label.set_opacity(op)
+        self.transcribing_label.set_opacity(opacity)
         return True
+
+    def _on_key_press(self, _widget, event):
+        if self.state in ('recording', 'transcribing') and \
+                event.keyval == Gdk.KEY_Escape:
+            self._cancel()
+            return True
+        return False
+
+    def _cancel(self, _button=None):
+        if self.state == 'cancelled':
+            return
+        previous_state = self.state
+        self.state = 'cancelled'
+        self._mark_cancelled()
+
+        recorder_pid = self._read_pid(self.recorder_pid_file)
+        if recorder_pid:
+            self._signal_process(recorder_pid, signal.SIGINT)
+
+            # Keep the PID and WAV files authoritative until arecord has
+            # actually released the microphone. If shutdown takes unusually
+            # long, the next launcher invocation can still find and stop it.
+            for _ in range(20):
+                if not self._process_exists(recorder_pid):
+                    self._unlink(self.recorder_pid_file)
+                    self._unlink(self.audio_file)
+                    break
+                time.sleep(0.05)
+
+        if previous_state == 'transcribing':
+            transcriber_pid = self._read_pid(self.transcriber_pid_file)
+            if transcriber_pid:
+                self._signal_process(transcriber_pid, signal.SIGTERM)
+            self._unlink(self.transcriber_pid_file)
+
+        self.destroy()
+
+    def _mark_cancelled(self):
+        if not self.cancel_file:
+            return
+        try:
+            # O_EXCL is unnecessary: the marker is deliberately idempotent.
+            fd = os.open(self.cancel_file,
+                         os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            os.close(fd)
+        except OSError:
+            pass
+
+    def _on_quit_signal(self):
+        self.destroy()
+        return GLib.SOURCE_REMOVE
+
+    def _on_destroy(self, _widget):
+        overlay_pid = self._read_pid(self.overlay_pid_file)
+        if overlay_pid == os.getpid():
+            self._unlink(self.overlay_pid_file)
+        Gtk.main_quit()
+
+    @staticmethod
+    def _read_pid(path):
+        if not path:
+            return None
+        try:
+            with open(path, encoding='ascii') as pid_file:
+                return int(pid_file.read().strip())
+        except (FileNotFoundError, OSError, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _unlink(path):
+        if not path:
+            return
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+
+    @staticmethod
+    def _signal_process(pid, sig):
+        try:
+            os.kill(pid, sig)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+    @staticmethod
+    def _process_exists(pid):
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='codex-voice recording overlay')
+    parser.add_argument('--audio-file')
+    parser.add_argument('--recorder-pid-file')
+    parser.add_argument('--overlay-pid-file')
+    parser.add_argument('--transcriber-pid-file')
+    parser.add_argument('--cancel-file')
+    parser.add_argument('--background-color', default='#0e1110eb')
+    parser.add_argument('--accent-color', default='#32d870')
+    parser.add_argument('--state-file')
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
-    Overlay()
+    args = parse_args()
+    Overlay(args.audio_file, args.recorder_pid_file, args.overlay_pid_file,
+            args.transcriber_pid_file, args.cancel_file, args.background_color,
+            args.accent_color, args.state_file)
     Gtk.main()

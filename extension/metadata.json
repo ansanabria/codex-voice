@@ -1,0 +1,7 @@
+{
+  "uuid": "codex-voice@andy-spike.github.io",
+  "name": "Codex Voice",
+  "description": "Native GNOME Shell controls and recording pill for Codex Voice.",
+  "shell-version": ["46", "50"],
+  "settings-schema": "io.github.andy_spike.CodexVoice"
+}

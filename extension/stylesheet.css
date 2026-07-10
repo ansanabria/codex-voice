@@ -1,0 +1,4 @@
+.codex-voice-pill { border: 1px solid rgba(255,255,255,.12); border-radius: 22px; padding: 8px 10px; spacing: 8px; }
+.codex-voice-waveform { min-width: 70px; font-size: 17px; }
+.codex-voice-label { color: #f4f7f5; min-width: 92px; }
+.codex-voice-cancel { border-radius: 12px; color: #c6ccc8; width: 24px; height: 24px; }

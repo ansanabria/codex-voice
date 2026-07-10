@@ -1,49 +1,27 @@
 #!/usr/bin/env bash
-# codex-voice uninstall script
-# Removes scripts from ~/.local/bin and the GNOME custom shortcut.
 set -euo pipefail
 
-INSTALL_DIR="$HOME/.local/bin"
-BINDING_PREFIX="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings"
+PURGE=false
+[[ "${1:-}" == "--purge" ]] && PURGE=true
+[[ $# -le 1 ]] || { echo "usage: $0 [--purge]" >&2; exit 2; }
 
-echo "=== codex-voice uninstaller ==="
+INSTALL_BIN="$HOME/.local/bin"
+DATA_DIR="$HOME/.local/share/codex-voice"
+EXTENSION_UUID="codex-voice@andy-spike.github.io"
+EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
 
-# --- Remove scripts ---
-if [ -f "$INSTALL_DIR/codex-voice" ]; then
-  rm -f "$INSTALL_DIR/codex-voice"
-  echo "Removed: $INSTALL_DIR/codex-voice"
+gnome-extensions disable "$EXTENSION_UUID" 2>/dev/null || true
+rm -rf "$EXTENSION_DIR"
+rm -f "$INSTALL_BIN/codex-voice" "$INSTALL_BIN/codex-voice-settings"
+rm -f "$HOME/.local/share/applications/io.github.andy_spike.CodexVoice.desktop"
+rm -f "$HOME/.local/share/icons/hicolor/scalable/apps/codex-voice.svg"
+rm -f "$DATA_DIR/codex-voice-settings.AppImage" "$DATA_DIR/overlay.py"
+
+if "$PURGE"; then
+  GSETTINGS_SCHEMA_DIR="$DATA_DIR/schemas${GSETTINGS_SCHEMA_DIR:+:$GSETTINGS_SCHEMA_DIR}" gsettings reset-recursively io.github.andy_spike.CodexVoice 2>/dev/null || true
+  rm -rf "$DATA_DIR"
+  echo "Removed Codex Voice and purged saved preferences."
 else
-  echo "Script not found at $INSTALL_DIR/codex-voice"
+  echo "Removed application components. Saved GSettings preferences were preserved; use --purge to reset them."
 fi
-
-if [ -d "$HOME/.local/share/codex-voice" ]; then
-  rm -rf "$HOME/.local/share/codex-voice"
-  echo "Removed: $HOME/.local/share/codex-voice/"
-fi
-
-# --- Remove GNOME shortcut ---
-existing=$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)
-
-NEW_LIST=$(python3 -c "
-import ast, sys
-s = sys.argv[1].replace('@as []', '[]')
-items = ast.literal_eval(s)
-filtered = [item for item in items if 'codex-voice' not in item and 'Codex Voice' not in item]
-# Also check the command for each remaining item to be safe
-print(repr(filtered).replace(chr(39), chr(34)))
-" "$existing" 2>/dev/null || echo "$existing")
-
-if [ "$NEW_LIST" != "$existing" ]; then
-  gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$NEW_LIST"
-  echo "Removed GNOME custom shortcut entries."
-else
-  echo "No GNOME custom shortcut found."
-fi
-
-echo ""
-echo "=== Uninstall complete ==="
-echo ""
-echo "Note: codex-asr was installed via cargo and is NOT removed."
-echo "  To remove it: cargo uninstall codex-asr"
-echo ""
-echo "Note: System packages (ydotool, wl-clipboard, etc.) are NOT removed."
+echo "Shared system packages and codex-asr were not removed."

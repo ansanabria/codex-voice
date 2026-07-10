@@ -10,3 +10,7 @@ __pycache__/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+/target/
+node_modules/
+dist/
+dist-electron/

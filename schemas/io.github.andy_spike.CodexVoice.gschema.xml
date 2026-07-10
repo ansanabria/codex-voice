@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="io.github.andy_spike.CodexVoice" path="/io/github/andy_spike/CodexVoice/">
+    <key name="enabled" type="b">
+      <default>true</default>
+      <summary>Whether dictation is enabled</summary>
+    </key>
+    <key name="keybinding" type="as">
+      <default>["&lt;Control&gt;&lt;Super&gt;space"]</default>
+      <summary>Global dictation shortcut</summary>
+    </key>
+    <key name="pill-background-color" type="s">
+      <default>'#0e1110eb'</default>
+      <summary>Recording pill background colour</summary>
+    </key>
+    <key name="pill-accent-color" type="s">
+      <default>'#32d870'</default>
+      <summary>Recording pill accent colour</summary>
+    </key>
+    <key name="language" type="s">
+      <default>'auto'</default>
+      <summary>Transcription language hint</summary>
+    </key>
+  </schema>
+</schemalist>
