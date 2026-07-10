@@ -1,0 +1,12 @@
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.webm
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
