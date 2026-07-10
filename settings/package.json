@@ -1,6 +1,9 @@
 {
   "name": "codex-voice-settings",
   "version": "0.1.0",
+  "description": "Settings application for Codex Voice dictation",
+  "author": "codex-voice contributors",
+  "desktopName": "codex-voice-settings",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",

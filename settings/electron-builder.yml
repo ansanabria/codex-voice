@@ -4,8 +4,11 @@ linux:
   target:
     - AppImage
   category: Utility
+  syncDesktopName: true
   desktop:
-    StartupWMClass: codex-voice-settings
+    entry:
+      StartupWMClass: codex-voice-settings
+  artifactName: codex-voice-settings-${version}-x86_64.${ext}
 files:
   - dist/**
   - dist-electron/**
