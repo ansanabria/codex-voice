@@ -16,6 +16,11 @@ else
   echo "Script not found at $INSTALL_DIR/codex-voice"
 fi
 
+if [ -d "$HOME/.local/share/codex-voice" ]; then
+  rm -rf "$HOME/.local/share/codex-voice"
+  echo "Removed: $HOME/.local/share/codex-voice/"
+fi
+
 # --- Remove GNOME shortcut ---
 existing=$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)
 

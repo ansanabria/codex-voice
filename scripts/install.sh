@@ -68,9 +68,12 @@ echo ""
 # --- Install scripts ---
 echo "Installing scripts to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
+mkdir -p "$HOME/.local/share/codex-voice"
 cp "$SCRIPT_DIR/codex-voice" "$INSTALL_DIR/codex-voice"
 chmod +x "$INSTALL_DIR/codex-voice"
+cp "$PROJECT_DIR/src/overlay.py" "$HOME/.local/share/codex-voice/overlay.py"
 echo "  $INSTALL_DIR/codex-voice"
+echo "  $HOME/.local/share/codex-voice/overlay.py"
 echo ""
 
 # --- Configure GNOME shortcut ---

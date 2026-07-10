@@ -14,7 +14,15 @@ WAV_FILE="$STATE_DIR/codex-voice.wav"
 OVERLAY_PID_FILE="$STATE_DIR/codex-voice-overlay.pid"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OVERLAY_SCRIPT="$SCRIPT_DIR/../src/overlay.py"
+
+# Find overlay.py: check relative to script (dev), then ~/.local/share/codex-voice (installed)
+if [ -f "$SCRIPT_DIR/../src/overlay.py" ]; then
+  OVERLAY_SCRIPT="$SCRIPT_DIR/../src/overlay.py"
+elif [ -f "$HOME/.local/share/codex-voice/overlay.py" ]; then
+  OVERLAY_SCRIPT="$HOME/.local/share/codex-voice/overlay.py"
+else
+  OVERLAY_SCRIPT=""
+fi
 
 command -v codex-asr >/dev/null 2>&1 || {
   [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
@@ -71,8 +79,10 @@ else
   rm -f "$WAV_FILE" "$PID_FILE"
 
   # Launch overlay popup
-  python3 "$OVERLAY_SCRIPT" &
-  echo "$!" > "$OVERLAY_PID_FILE"
+  if [ -n "$OVERLAY_SCRIPT" ]; then
+    python3 "$OVERLAY_SCRIPT" &
+    echo "$!" > "$OVERLAY_PID_FILE"
+  fi
 
   # Start recording
   arecord -q -f S16_LE -r 48000 -c 1 "$WAV_FILE" >/dev/null 2>&1 &
