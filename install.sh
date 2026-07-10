@@ -27,17 +27,17 @@ DATA_DIR="$HOME/.local/share/codex-voice"
 SCHEMA_DIR="$DATA_DIR/schemas"
 EXTENSION_UUID="codex-voice@andy-spike.github.io"
 EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
-VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$ROOT_DIR/Cargo.toml" | head -n1)"
+APP_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$ROOT_DIR/Cargo.toml" | head -n1)"
 APPIMAGE="$DATA_DIR/codex-voice-settings.AppImage"
-APPIMAGE_URL="${CODEX_VOICE_SETTINGS_APPIMAGE_URL:-https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/codex-voice-settings-$VERSION-x86_64.AppImage}"
+APPIMAGE_URL="${CODEX_VOICE_SETTINGS_APPIMAGE_URL:-https://github.com/$GITHUB_REPOSITORY/releases/download/v$APP_VERSION/codex-voice-settings-$APP_VERSION-x86_64.AppImage}"
 APPIMAGE_SHA_URL="${CODEX_VOICE_SETTINGS_SHA256_URL:-$APPIMAGE_URL.sha256}"
 LOCAL_APPIMAGE="${CODEX_VOICE_SETTINGS_APPIMAGE:-}"
 
 if [[ -z "$LOCAL_APPIMAGE" ]]; then
   for candidate in \
-    "$ROOT_DIR/settings/dist/codex-voice-settings-$VERSION-x86_64.AppImage" \
-    "$ROOT_DIR/settings/dist/Codex Voice Settings-$VERSION.AppImage" \
-    "$ROOT_DIR/settings/release/codex-voice-settings-$VERSION-x86_64.AppImage"; do
+    "$ROOT_DIR/settings/dist/codex-voice-settings-$APP_VERSION-x86_64.AppImage" \
+    "$ROOT_DIR/settings/dist/Codex Voice Settings-$APP_VERSION.AppImage" \
+    "$ROOT_DIR/settings/release/codex-voice-settings-$APP_VERSION-x86_64.AppImage"; do
     if [[ -f "$candidate" ]]; then
       LOCAL_APPIMAGE="$candidate"
       break
@@ -53,7 +53,7 @@ SUPPORTED_SHELL=false
 [[ "${ID:-}" == ubuntu && ( "$UBUNTU_VERSION" == 24.04 || "$UBUNTU_VERSION" == 26.04 ) ]] && SUPPORTED_UBUNTU=true
 [[ "$GNOME_VERSION" == 46 || "$GNOME_VERSION" == 50 ]] && SUPPORTED_SHELL=true
 
-echo "codex-voice $VERSION"
+echo "codex-voice $APP_VERSION"
 echo "Detected Ubuntu $UBUNTU_VERSION; GNOME Shell ${GNOME_VERSION:-unknown}."
 
 INSTALL_EXTENSION=false
@@ -112,7 +112,7 @@ install_settings_appimage() {
     return
   fi
 
-  echo "Downloading settings AppImage $VERSION…"
+  echo "Downloading settings AppImage $APP_VERSION…"
   temp="$(mktemp "$DATA_DIR/.settings.XXXXXX")"
   checksum="$(mktemp "$DATA_DIR/.settings.sha.XXXXXX")"
   trap 'rm -f "$temp" "$checksum"' RETURN
