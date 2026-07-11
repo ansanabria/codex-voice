@@ -1,50 +1,85 @@
-# codex-voice
+# Codex Voice
 
-Push-to-talk Linux dictation using `codex-asr` and an existing Codex login.
+Push-to-talk voice dictation for Linux, powered by `codex-asr` and an existing Codex login.
+
+> **Unofficial project.** codex-voice is not affiliated with, endorsed by, or supported by OpenAI or the Codex team. There is no warranty and no support channel. Use it at your own risk.
+
+## What it does
+
+- **Push-to-talk dictation** — press a global keyboard shortcut, speak, and the transcription is typed into whatever window has focus.
+- **On-screen pill** — a small recording indicator appears while listening and disappears when done.
+- **GNOME integration** — an optional top-bar indicator with start/stop/cancel controls and a settings window.
+- **Language support** — automatic detection by default, or pick from common languages and regional variants.
 
 ## Supported platforms
 
-The release contract is Ubuntu 24.04 LTS with GNOME Shell 46 and Ubuntu 26.04 LTS with GNOME Shell 50, on either Wayland or X11. Other Ubuntu releases, GNOME 47–49, Ubuntu 22.04, and derivatives are not advertised as supported.
+| Ubuntu    | GNOME Shell | Wayland | X11 |
+| --------- | ----------- | ------- | --- |
+| 24.04 LTS | 46          | yes     | yes |
+| 26.04 LTS | 50          | yes     | yes |
 
-On supported GNOME versions, the Shell extension supplies the top-bar menu and global shortcut. The CLI renders the pill with Python, GTK3, and XWayland so it can be positioned consistently on both Wayland and X11 sessions.
+Other Ubuntu releases, GNOME 47–49, Ubuntu 22.04, and derivatives are **not** supported.
+
+On supported GNOME versions, the Shell extension provides the top-bar menu and global shortcut. The CLI renders the pill with Python, GTK3, and XWayland so it positions consistently on both Wayland and X11.
 
 ## Install
 
-The `.deb` is the complete installation artifact. It contains the CLI, bundled `codex-asr`, GTK pill, GSettings schema, GNOME extension, shortcut setup, desktop entry, icon, and settings application. `apt` also installs the required Ubuntu runtime packages.
+### Prerequisites
 
-Install a local build with:
+- **Codex CLI** installed and logged in on the same machine. See the [Codex CLI install instructions](https://github.com/openai/codex#quickstart) if you don't have it yet.
+- Ubuntu 24.04 or 26.04 with GNOME Shell 46 or 50.
+
+### From a .deb
+
+The `.deb` is the complete installer. It bundles the CLI, `codex-asr`, the GTK pill, the GSettings schema, the GNOME extension, shortcut setup, a desktop entry, an icon, and the settings app. `apt` pulls in the required runtime packages automatically.
 
 ```bash
 sudo apt install ./settings/dist/codex-voice-settings-0.1.0-x86_64.deb
 ```
 
-The package registers the AppArmor profile needed by Chromium's renderer sandbox on Ubuntu 24.04 and newer. On the first GNOME session after installation, the package enables the extension for the logged-in user; unsupported shells receive the legacy shortcut fallback.
+After install:
 
-## Commands
+- The AppArmor profile needed by Chromium's renderer sandbox is registered (Ubuntu 24.04+).
+- On the next GNOME login, the extension is enabled automatically. If the shell is unsupported, a legacy global shortcut is configured instead.
 
-```text
-codex-voice                 # toggle (backward compatible)
-codex-voice --toggle
-codex-voice --start | --stop | --cancel | --status | --settings
-codex-voice settings get
-codex-voice settings set language auto
-```
-
-Settings writes return the complete JSON document. The shared schema is installed in `~/.local/share/codex-voice/schemas/`.
-
-## Language detection
-
-Language defaults to `auto`. In that mode `codex-voice` intentionally omits `--language` when running `codex-asr`, allowing the upstream service to infer it. An explicit, lower-cased BCP-47-like code such as `en`, `es`, or `zh-hant` is passed as a hint.
-
-`CODEX_VOICE_LANG` overrides the saved value. `CODEX_VOICE_LANG=auto` and an empty value select automatic detection. The settings app displays the active override.
-
-Automatic detection is provided by an undocumented upstream endpoint. Its accuracy and supported language set are not a stable API.
-
-## Development
+### Build from source
 
 ```bash
 cargo test
 cd settings && npm install && npm run build
+```
+
+This produces the `.deb` at `settings/dist/`.
+
+## Usage
+
+```text
+codex-voice                 # toggle (default)
+codex-voice --toggle
+codex-voice --start         # begin recording
+codex-voice --stop          # stop and transcribe
+codex-voice --cancel        # discard the current recording
+codex-voice --status        # print current state
+codex-voice --settings      # open the settings window
+codex-voice settings get    # print settings as JSON
+codex-voice settings set language auto
+```
+
+Settings writes return the complete JSON document. The shared schema lives in `~/.local/share/codex-voice/schemas/`.
+
+## Language
+
+Language defaults to `auto`, which omits `--language` when calling `codex-asr` and lets the upstream service infer it. An explicit lower-cased code such as `en`, `es`, or `zh-hant` is passed as a hint.
+
+`CODEX_VOICE_LANG` overrides the saved value. `CODEX_VOICE_LANG=auto` or an empty value selects automatic detection. The settings app shows the active override.
+
+> Automatic detection relies on an undocumented upstream endpoint. Its accuracy and supported language set are not a stable API.
+
+## Development
+
+```bash
+cargo test                    # Rust CLI tests
+cd settings && npm install && npm test   # settings app tests
 ```
 
 The Electron renderer is React + TypeScript + Vite + Tailwind CSS v4. Its preload bridge exposes only typed settings operations, and the main process invokes the Rust CLI with fixed argument arrays rather than a shell.
@@ -52,7 +87,11 @@ The Electron renderer is React + TypeScript + Vite + Tailwind CSS v4. Its preloa
 ## Uninstall
 
 ```bash
-sudo apt remove codex-voice-settings  # remove the installed application
+sudo apt remove codex-voice-settings  # remove the application
 ./scripts/uninstall.sh                # also clean legacy per-user files
 ./scripts/uninstall.sh --purge        # also reset saved preferences
 ```
+
+## Disclaimer
+
+Codex Voice is an independent, community project. It is **not** developed or supported by OpenAI. Issues, bugs, and feature requests should not be directed at OpenAI or the Codex team. There is no guarantee of continued maintenance or compatibility with future Codex changes.
