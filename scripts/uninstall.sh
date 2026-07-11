@@ -11,11 +11,17 @@ EXTENSION_UUID="codex-voice@andy-spike.github.io"
 EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
 
 gnome-extensions disable "$EXTENSION_UUID" 2>/dev/null || true
+if [[ -x "$DATA_DIR/gnome-custom-shortcuts.py" ]]; then
+  "$DATA_DIR/gnome-custom-shortcuts.py" remove || echo "WARNING: could not remove legacy GNOME shortcuts." >&2
+fi
 rm -rf "$EXTENSION_DIR"
 rm -f "$INSTALL_BIN/codex-voice" "$INSTALL_BIN/codex-voice-settings"
 rm -f "$HOME/.local/share/applications/io.github.andy_spike.CodexVoice.desktop"
 rm -f "$HOME/.local/share/icons/hicolor/scalable/apps/codex-voice.svg"
-rm -f "$DATA_DIR/codex-voice-settings.AppImage" "$DATA_DIR/overlay.py"
+rm -f "$DATA_DIR/overlay.py" "$DATA_DIR/gnome-custom-shortcuts.py"
+if dpkg-query -W -f='${Status}' codex-voice-settings 2>/dev/null | grep -q 'ok installed'; then
+  sudo apt-get remove -y codex-voice-settings
+fi
 
 if "$PURGE"; then
   GSETTINGS_SCHEMA_DIR="$DATA_DIR/schemas${GSETTINGS_SCHEMA_DIR:+:$GSETTINGS_SCHEMA_DIR}" gsettings reset-recursively io.github.andy_spike.CodexVoice 2>/dev/null || true

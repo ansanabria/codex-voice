@@ -1,8 +1,9 @@
-export type SettingsKey = "enabled" | "keybinding" | "pill-background-color" | "pill-accent-color" | "language";
+export type SettingsKey = "enabled" | "show-tray-icon" | "keybinding" | "pill-background-color" | "pill-accent-color" | "language";
 
 export type SettingsDocument = {
   schemaVersion: 1;
   enabled: boolean;
+  showTrayIcon: boolean;
   keybinding: string;
   pillBackgroundColor: string;
   pillAccentColor: string;
@@ -27,6 +28,7 @@ declare global {
       update(key: SettingsKey, value: boolean | string): Promise<SettingsDocument>;
       reset(): Promise<SettingsDocument>;
       getAppInfo(): Promise<AppInfo>;
+      onChanged(callback: (settings: SettingsDocument) => void): () => void;
     };
   }
 }

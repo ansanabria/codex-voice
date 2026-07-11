@@ -5,5 +5,5 @@ Comment=Configure Codex Voice dictation
 Exec=codex-voice-settings
 Icon=codex-voice
 Terminal=false
-Categories=Utility;Settings;
+Categories=Utility;
 StartupWMClass=codex-voice-settings

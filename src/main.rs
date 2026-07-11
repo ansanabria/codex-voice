@@ -3,7 +3,7 @@ use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitCode, Stdio};
+use std::process::{Child, Command, ExitCode, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -11,8 +11,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 const SCHEMA: &str = "io.github.andy_spike.CodexVoice";
 const EXTENSION_UUID: &str = "codex-voice@andy-spike.github.io";
 const DEFAULT_KEYBINDING: &str = "<Control><Super>space";
-const DEFAULT_BACKGROUND: &str = "#0e1110eb";
-const DEFAULT_ACCENT: &str = "#32d870";
+const DEFAULT_BACKGROUND: &str = "#0f0f0feb";
+const DEFAULT_ACCENT: &str = "#10a37fff";
 
 static INTERRUPTED: AtomicBool = AtomicBool::new(false);
 static ACTIVE_CHILD: AtomicI32 = AtomicI32::new(0);
@@ -79,6 +79,7 @@ struct RuntimeStateDocument {
 #[derive(Debug, Clone)]
 struct Settings {
     enabled: bool,
+    show_tray_icon: bool,
     keybinding: String,
     pill_background_color: String,
     pill_accent_color: String,
@@ -91,6 +92,7 @@ struct Settings {
 struct SettingsDocument<'a> {
     schema_version: u8,
     enabled: bool,
+    show_tray_icon: bool,
     keybinding: &'a str,
     pill_background_color: &'a str,
     pill_accent_color: &'a str,
@@ -108,6 +110,7 @@ impl Settings {
         SettingsDocument {
             schema_version: 1,
             enabled: self.enabled,
+            show_tray_icon: self.show_tray_icon,
             keybinding: &self.keybinding,
             pill_background_color: &self.pill_background_color,
             pill_accent_color: &self.pill_accent_color,
@@ -196,9 +199,6 @@ fn run() -> io::Result<u8> {
 }
 
 fn toggle(paths: &Paths) -> io::Result<u8> {
-    if cancel_active_session(paths)? {
-        return Ok(0);
-    }
     if let Some(recorder_pid) = read_pid(&paths.recorder_pid).filter(|pid| process_exists(*pid)) {
         let codex_asr = find_command("codex-asr").ok_or_else(|| {
             io::Error::new(
@@ -207,6 +207,8 @@ fn toggle(paths: &Paths) -> io::Result<u8> {
             )
         })?;
         stop_recording(paths, recorder_pid, &codex_asr)
+    } else if cancel_active_session(paths)? {
+        Ok(0)
     } else {
         start_if_allowed(paths)
     }
@@ -242,6 +244,9 @@ fn cancel_active_session(paths: &Paths) -> io::Result<bool> {
         remove(&paths.recorder_pid);
         remove(&paths.wav);
         cancelled = true;
+    } else {
+        remove(&paths.recorder_pid);
+        remove(&paths.wav);
     }
     if let Some(owner) = read_pid(&paths.session_owner_pid) {
         if process_exists(owner) {
@@ -256,11 +261,11 @@ fn cancel_active_session(paths: &Paths) -> io::Result<bool> {
             remove(&paths.typing_pid);
         }
     }
-    if cancelled {
-        kill_from_file(&paths.overlay_pid, libc::SIGTERM);
-        remove(&paths.overlay_pid);
-        clear_runtime_state(paths);
-    }
+    // Idempotently repair protocol state even when a previous controller
+    // already stopped the worker process.
+    kill_from_file(&paths.overlay_pid, libc::SIGTERM);
+    remove(&paths.overlay_pid);
+    clear_runtime_state(paths);
     Ok(cancelled)
 }
 
@@ -297,18 +302,23 @@ fn stop_recording(paths: &Paths, recorder_pid: i32, codex_asr: &Path) -> io::Res
     command.args(transcriber_language_args(&language));
     let mut transcriber = command
         .stdout(Stdio::from(transcript))
-        .stderr(Stdio::null())
+        .stderr(Stdio::inherit())
         .spawn()?;
     publish_child(&mut transcriber, &paths.transcriber_pid)?;
     if paths.cancel.exists() {
         let _ = transcriber.kill();
     }
-    wait_for_child(&mut transcriber);
+    let transcriber_status = wait_for_child(&mut transcriber)?;
     remove(&paths.transcriber_pid);
     remove(&paths.wav);
 
     if paths.cancel.exists() || INTERRUPTED.load(Ordering::SeqCst) {
         return Ok(0);
+    }
+    if !transcriber_status.success() {
+        return Err(io::Error::other(format!(
+            "codex-asr exited with {transcriber_status}"
+        )));
     }
     let mut text = String::new();
     File::open(&paths.transcript)?.read_to_string(&mut text)?;
@@ -332,7 +342,7 @@ fn stop_recording(paths: &Paths, recorder_pid: i32, codex_asr: &Path) -> io::Res
                 .stderr(Stdio::null())
                 .spawn()?;
             publish_child(&mut typing, &paths.typing_pid)?;
-            wait_for_child(&mut typing);
+            let _ = wait_for_child(&mut typing);
             remove(&paths.typing_pid);
         }
     }
@@ -357,46 +367,61 @@ fn start_recording(paths: &Paths) -> io::Result<u8> {
     remove(&paths.overlay_pid);
     let arecord = find_command("arecord")
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "arecord was not found in PATH"))?;
-    let recorder = Command::new(arecord)
+    let mut recorder = Command::new(arecord)
         .args(["-q", "-f", "S16_LE", "-r", "48000", "-c", "1"])
         .arg(&paths.wav)
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()?;
     write_pid_atomic(&paths.recorder_pid, recorder.id())?;
+    thread::sleep(Duration::from_millis(100));
+    if let Some(status) = recorder.try_wait()? {
+        let mut detail = String::new();
+        if let Some(mut stderr) = recorder.stderr.take() {
+            let _ = stderr.read_to_string(&mut detail);
+        }
+        remove(&paths.recorder_pid);
+        remove(&paths.wav);
+        return Err(io::Error::other(format!(
+            "audio recorder exited during startup ({status}){}",
+            if detail.trim().is_empty() {
+                String::new()
+            } else {
+                format!(": {}", detail.trim())
+            }
+        )));
+    }
     publish_runtime_state(paths, RuntimeState::Recording, recorder.id())?;
 
-    if !extension_is_active().unwrap_or(false) {
-        if let Some(overlay) = find_overlay_script() {
-            let settings = load_settings()?;
-            let mut command = Command::new("python3");
-            command
-                .arg(overlay)
-                .arg("--audio-file")
-                .arg(&paths.wav)
-                .arg("--recorder-pid-file")
-                .arg(&paths.recorder_pid)
-                .arg("--overlay-pid-file")
-                .arg(&paths.overlay_pid)
-                .arg("--transcriber-pid-file")
-                .arg(&paths.transcriber_pid)
-                .arg("--cancel-file")
-                .arg(&paths.cancel)
-                .arg("--background-color")
-                .arg(settings.pill_background_color)
-                .arg("--accent-color")
-                .arg(settings.pill_accent_color)
-                .arg("--state-file")
-                .arg(&paths.runtime_state)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null());
-            if let Some(backend) = overlay_backend() {
-                command.env("GDK_BACKEND", backend);
-            }
-            match command.spawn() {
-                Ok(child) => write_pid_atomic(&paths.overlay_pid, child.id())?,
-                Err(error) => eprintln!("codex-voice: could not start GTK fallback: {error}"),
-            }
+    if let Some(overlay) = find_overlay_script() {
+        let settings = load_settings()?;
+        let mut command = Command::new("python3");
+        command
+            .arg(overlay)
+            .arg("--audio-file")
+            .arg(&paths.wav)
+            .arg("--recorder-pid-file")
+            .arg(&paths.recorder_pid)
+            .arg("--overlay-pid-file")
+            .arg(&paths.overlay_pid)
+            .arg("--transcriber-pid-file")
+            .arg(&paths.transcriber_pid)
+            .arg("--cancel-file")
+            .arg(&paths.cancel)
+            .arg("--background-color")
+            .arg(settings.pill_background_color)
+            .arg("--accent-color")
+            .arg(settings.pill_accent_color)
+            .arg("--state-file")
+            .arg(&paths.runtime_state)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        if let Some(backend) = overlay_backend() {
+            command.env("GDK_BACKEND", backend);
+        }
+        match command.spawn() {
+            Ok(child) => write_pid_atomic(&paths.overlay_pid, child.id())?,
+            Err(error) => eprintln!("codex-voice: could not start GTK overlay: {error}"),
         }
     }
     Ok(0)
@@ -413,7 +438,14 @@ fn print_status(paths: &Paths) -> io::Result<()> {
 fn launch_settings() -> io::Result<u8> {
     let binary = env::var_os("CODEX_VOICE_SETTINGS_BIN")
         .map(PathBuf::from)
-        .or_else(|| home_dir().map(|home| home.join(".local/bin/codex-voice-settings")));
+        .or_else(|| {
+            [
+                PathBuf::from("/usr/bin/codex-voice-settings"),
+                home_dir().map(|home| home.join(".local/bin/codex-voice-settings"))?,
+            ]
+            .into_iter()
+            .find(|path| path.is_file())
+        });
     let Some(binary) = binary.filter(|path| path.is_file()) else {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
@@ -448,17 +480,28 @@ fn print_settings() -> io::Result<u8> {
     Ok(0)
 }
 
-fn settings_schema_dir() -> Option<PathBuf> {
-    home_dir().map(|home| home.join(".local/share/codex-voice/schemas"))
-}
-
 fn gsettings_command() -> Command {
     let mut command = Command::new("gsettings");
-    if let Some(dir) = settings_schema_dir().filter(|dir| dir.is_dir()) {
+    let mut schema_dirs = Vec::new();
+    if let Some(dir) = home_dir().map(|home| home.join(".local/share/codex-voice/schemas")) {
+        if dir.is_dir() {
+            schema_dirs.push(dir);
+        }
+    }
+    let system_dir = PathBuf::from("/usr/share/glib-2.0/schemas");
+    if system_dir.is_dir() {
+        schema_dirs.push(system_dir);
+    }
+    if !schema_dirs.is_empty() {
         let old = env::var_os("GSETTINGS_SCHEMA_DIR");
-        let value = old
-            .map(|old| format!("{}:{}", dir.display(), PathBuf::from(old).display()))
-            .unwrap_or_else(|| dir.display().to_string());
+        let mut values: Vec<String> = schema_dirs
+            .into_iter()
+            .map(|dir| dir.display().to_string())
+            .collect();
+        if let Some(old) = old {
+            values.push(PathBuf::from(old).display().to_string());
+        }
+        let value = values.join(":");
         command.env("GSETTINGS_SCHEMA_DIR", value);
     }
     command
@@ -482,6 +525,9 @@ fn gsettings(args: &[&str]) -> io::Result<String> {
 
 fn load_settings() -> io::Result<Settings> {
     let enabled = gsettings(&["get", SCHEMA, "enabled"])
+        .map(|v| v == "true")
+        .unwrap_or(true);
+    let show_tray_icon = gsettings(&["get", SCHEMA, "show-tray-icon"])
         .map(|v| v == "true")
         .unwrap_or(true);
     let keybinding = gsettings(&["get", SCHEMA, "keybinding"])
@@ -510,6 +556,7 @@ fn load_settings() -> io::Result<Settings> {
         .and_then(|v| normalize_language(&v));
     Ok(Settings {
         enabled,
+        show_tray_icon,
         keybinding,
         pill_background_color: background,
         pill_accent_color: accent,
@@ -520,17 +567,23 @@ fn load_settings() -> io::Result<Settings> {
 
 fn set_setting(key: &str, value: &str) -> io::Result<()> {
     match key {
-        "enabled" => {
+        "enabled" | "show-tray-icon" => {
             if value != "true" && value != "false" {
-                return Err(invalid_input("enabled must be true or false"));
+                return Err(invalid_input("boolean setting must be true or false"));
             }
             gsettings(&["set", SCHEMA, key, value])?;
+            if key == "enabled" {
+                sync_fallback_shortcut(value == "true")?;
+            }
         }
         "keybinding" => {
             let accelerator = normalize_accelerator(value)
                 .ok_or_else(|| invalid_input("invalid GNOME accelerator"))?;
             let escaped = accelerator.replace('\\', "\\\\").replace('\'', "\\'");
             gsettings(&["set", SCHEMA, key, &format!("['{escaped}']")])?;
+            if load_settings()?.enabled {
+                sync_fallback_shortcut(true)?;
+            }
         }
         "pill-background-color" | "pill-accent-color" => {
             let color = normalize_color(value)
@@ -548,7 +601,37 @@ fn set_setting(key: &str, value: &str) -> io::Result<()> {
 }
 
 fn reset_settings() -> io::Result<u8> {
-    gsettings(&["reset-recursively", SCHEMA]).map(|_| 0)
+    gsettings(&["reset-recursively", SCHEMA])?;
+    sync_fallback_shortcut(true)?;
+    Ok(0)
+}
+
+fn sync_fallback_shortcut(enabled: bool) -> io::Result<()> {
+    let helper = [
+        PathBuf::from("/usr/lib/codex-voice/gnome-custom-shortcuts.py"),
+        env::current_dir()
+            .unwrap_or_default()
+            .join("scripts/gnome-custom-shortcuts.py"),
+    ]
+    .into_iter()
+    .find(|candidate| candidate.is_file());
+    let Some(helper) = helper else {
+        return Ok(());
+    };
+    let extension_active = extension_is_active().unwrap_or(false);
+    let action = if enabled && !extension_active {
+        "install"
+    } else {
+        "remove"
+    };
+    let status = Command::new(helper).arg(action).status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!(
+            "could not {action} the fallback global shortcut"
+        )))
+    }
 }
 
 fn parse_gvariant_string(value: &str) -> Option<String> {
@@ -693,9 +776,9 @@ fn extension_is_active() -> io::Result<bool> {
     if !output.status.success() {
         return Ok(false);
     }
-    Ok(String::from_utf8_lossy(&output.stdout).lines().any(|line| {
-        line.trim().starts_with("State:") && line.to_ascii_lowercase().contains("active")
-    }))
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .any(|line| line.trim().eq_ignore_ascii_case("State: ACTIVE")))
 }
 
 fn platform_info() -> (String, String) {
@@ -727,15 +810,20 @@ fn publish_child(child: &mut Child, pid_file: &Path) -> io::Result<()> {
     ACTIVE_CHILD.store(child.id() as i32, Ordering::SeqCst);
     write_pid_atomic(pid_file, child.id())
 }
-fn wait_for_child(child: &mut Child) {
+fn wait_for_child(child: &mut Child) -> io::Result<ExitStatus> {
     loop {
         match child.wait() {
-            Ok(_) => break,
+            Ok(status) => {
+                ACTIVE_CHILD.store(0, Ordering::SeqCst);
+                return Ok(status);
+            }
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-            Err(_) => break,
+            Err(error) => {
+                ACTIVE_CHILD.store(0, Ordering::SeqCst);
+                return Err(error);
+            }
         }
     }
-    ACTIVE_CHILD.store(0, Ordering::SeqCst);
 }
 fn copy_to_clipboard(text: &str) {
     let Some(wl_copy) = find_command("wl-copy") else {
@@ -761,6 +849,7 @@ fn find_overlay_script() -> Option<PathBuf> {
             candidates.extend([
                 dir.join("../src/overlay.py"),
                 dir.join("../share/codex-voice/overlay.py"),
+                dir.join("../lib/codex-voice/overlay.py"),
                 dir.join("../../../src/overlay.py"),
             ]);
         }
@@ -771,6 +860,7 @@ fn find_overlay_script() -> Option<PathBuf> {
     if let Some(home) = home_dir() {
         candidates.push(home.join(".local/share/codex-voice/overlay.py"));
     }
+    candidates.push(PathBuf::from("/usr/share/codex-voice/overlay.py"));
     candidates.into_iter().find(|path| path.is_file())
 }
 fn overlay_backend() -> Option<String> {
@@ -796,10 +886,14 @@ fn find_command(name: &str) -> Option<PathBuf> {
             return Some(found);
         }
     }
-    (name == "codex-asr")
-        .then(home_dir)?
-        .map(|home| home.join(".cargo/bin/codex-asr"))
-        .filter(|path| path.is_file())
+    if name == "codex-asr" {
+        let candidates = [
+            Some(PathBuf::from("/usr/lib/codex-voice/codex-asr")),
+            home_dir().map(|home| home.join(".cargo/bin/codex-asr")),
+        ];
+        return candidates.into_iter().flatten().find(|path| path.is_file());
+    }
+    None
 }
 fn home_dir() -> Option<PathBuf> {
     env::var_os("HOME").map(PathBuf::from)
@@ -885,6 +979,7 @@ mod tests {
     fn auto_does_not_add_asr_language_argument() {
         let settings = Settings {
             enabled: true,
+            show_tray_icon: true,
             keybinding: DEFAULT_KEYBINDING.into(),
             pill_background_color: DEFAULT_BACKGROUND.into(),
             pill_accent_color: DEFAULT_ACCENT.into(),

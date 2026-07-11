@@ -6,28 +6,19 @@ Push-to-talk Linux dictation using `codex-asr` and an existing Codex login.
 
 The release contract is Ubuntu 24.04 LTS with GNOME Shell 46 and Ubuntu 26.04 LTS with GNOME Shell 50, on either Wayland or X11. Other Ubuntu releases, GNOME 47–49, Ubuntu 22.04, and derivatives are not advertised as supported.
 
-On supported GNOME versions, the Shell extension supplies the top-bar menu, global shortcut, and native Wayland/X11 pill. The CLI retains the GTK3/XWayland pill as an extension-free fallback.
+On supported GNOME versions, the Shell extension supplies the top-bar menu and global shortcut. The CLI renders the pill with Python, GTK3, and XWayland so it can be positioned consistently on both Wayland and X11 sessions.
 
 ## Install
 
-Install everything—CLI, settings AppImage, schema, GTK fallback, desktop entry, and GNOME extension—with one command:
+The `.deb` is the complete installation artifact. It contains the CLI, bundled `codex-asr`, GTK pill, GSettings schema, GNOME extension, shortcut setup, desktop entry, icon, and settings application. `apt` also installs the required Ubuntu runtime packages.
+
+Install a local build with:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf \
-  https://raw.githubusercontent.com/ansanabria/codex-voice/master/install.sh | bash
+sudo apt install ./settings/dist/codex-voice-settings-0.1.0-x86_64.deb
 ```
 
-From a checkout, run the same installer directly:
-
-```bash
-./install.sh
-```
-
-If a settings AppImage has already been built locally, the installer picks it up from `settings/dist/` or `settings/release/`. A specific artifact can be supplied with `CODEX_VOICE_SETTINGS_APPIMAGE=/path/to/file.AppImage ./install.sh`.
-
-The installer builds the Rust CLI, compiles the private GSettings schema, installs a local AppImage or downloads a version-pinned one with SHA-256 verification, then enables the extension when the host is in the support contract. On a supported Ubuntu release with an unexpected Shell, use `CODEX_VOICE_EXTENSION_OVERRIDE=1` only if you explicitly accept extension risk. Unsupported hosts still receive the CLI with a warning.
-
-The settings AppImage is installed at `~/.local/share/codex-voice/codex-voice-settings.AppImage`; its `~/.local/bin/codex-voice-settings` wrapper does not disable Electron's sandbox.
+The package registers the AppArmor profile needed by Chromium's renderer sandbox on Ubuntu 24.04 and newer. On the first GNOME session after installation, the package enables the extension for the logged-in user; unsupported shells receive the legacy shortcut fallback.
 
 ## Commands
 
@@ -61,8 +52,7 @@ The Electron renderer is React + TypeScript + Vite + Tailwind CSS v4. Its preloa
 ## Uninstall
 
 ```bash
-./scripts/uninstall.sh          # preserve saved preferences
-./scripts/uninstall.sh --purge  # also reset saved preferences
+sudo apt remove codex-voice-settings  # remove the installed application
+./scripts/uninstall.sh                # also clean legacy per-user files
+./scripts/uninstall.sh --purge        # also reset saved preferences
 ```
-
-Neither variant removes system packages or `codex-asr`.

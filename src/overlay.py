@@ -34,8 +34,6 @@ LEVEL_POLL_MS = 50
 WAV_HEADER_SIZE = 44
 LEVEL_BYTES = 4096
 
-COLOR_ICON = '#32D870'
-COLOR_BARS = (0.58, 0.96, 0.70)
 COLOR_CANCEL = '#8E9692'
 
 
@@ -56,9 +54,17 @@ def _normalize_color(value, fallback):
 
 
 def _hex_to_rgb(color):
-    color = _normalize_color(color, '#32d870')[1:7]
+    color = _normalize_color(color, '#10a37fff')[1:7]
     return tuple(int(color[index:index + 2], 16) / 255.0
                  for index in range(0, 6, 2))
+
+
+def _to_gtk_css_color(color, fallback):
+    """Translate persisted #rrggbbaa values for GTK 3's CSS parser."""
+    color = _normalize_color(color, fallback)[1:]
+    red, green, blue, alpha = (int(color[index:index + 2], 16)
+                               for index in range(0, 8, 2))
+    return f'rgba({red}, {green}, {blue}, {alpha / 255.0:.3f})'
 
 
 class Waveform(Gtk.DrawingArea):
@@ -107,10 +113,11 @@ class Overlay(Gtk.Window):
 
     def __init__(self, audio_file=None, recorder_pid_file=None,
                  overlay_pid_file=None, transcriber_pid_file=None,
-                 cancel_file=None, background_color='#0e1110eb',
-                 accent_color='#32d870', state_file=None):
-        # A utility toplevel can receive Esc during transcription. The launcher
-        # uses XWayland so its explicit bottom-center placement is still honored.
+                 cancel_file=None, background_color='#0f0f0feb',
+                 accent_color='#10a37fff', state_file=None):
+        # The launcher uses XWayland because native Wayland clients cannot place
+        # toplevels in global coordinates. Keep the overlay non-focusable so the
+        # eventual transcription is typed into the window the user started in.
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
         self.audio_file = audio_file
         self.recorder_pid_file = recorder_pid_file
@@ -118,8 +125,10 @@ class Overlay(Gtk.Window):
         self.transcriber_pid_file = transcriber_pid_file
         self.cancel_file = cancel_file
         self.state_file = state_file
-        self.background_color = _normalize_color(background_color, '#0e1110eb')
-        self.accent_color = _normalize_color(accent_color, '#32d870')
+        self.background_color = _normalize_color(background_color, '#0f0f0feb')
+        self.accent_color = _normalize_color(accent_color, '#10a37fff')
+        background_css = _to_gtk_css_color(self.background_color, '#0f0f0feb')
+        accent_css = _to_gtk_css_color(self.accent_color, '#10a37fff')
         self.state = 'recording'
         self._level_history = [0.0] * ((NUM_BARS // 2) + 1)
         self._smoothed_level = 0.0
@@ -131,13 +140,11 @@ class Overlay(Gtk.Window):
         self.set_resizable(False)
         self.set_skip_taskbar_hint(True)
         self.set_skip_pager_hint(True)
-        self.set_type_hint(Gdk.WindowTypeHint.UTILITY)
+        self.set_type_hint(Gdk.WindowTypeHint.NOTIFICATION)
         self.set_keep_above(True)
-        # The overlay takes temporary focus while visible so Esc can always
-        # cancel, both during recording and transcription.
-        self.set_accept_focus(True)
+        self.set_accept_focus(False)
         self.set_focus_on_map(False)
-        self.set_can_focus(True)
+        self.set_can_focus(False)
         self.set_gravity(Gdk.Gravity.NORTH_WEST)
         self.stick()
         self.set_size_request(PILL_W, PILL_H)
@@ -152,13 +159,13 @@ class Overlay(Gtk.Window):
             background-color: transparent;
         }}
         .pill {{
-            background-color: {self.background_color};
+            background-color: {background_css};
             border: 1px solid rgba(255, 255, 255, 0.10);
             border-radius: 19px;
             padding: 6px 8px;
         }}
         .mic-icon {{
-            color: {self.accent_color};
+            color: {accent_css};
         }}
         .transcribing-label {{
             color: #f4f7f5;
@@ -188,7 +195,6 @@ class Overlay(Gtk.Window):
 
         self._build_ui()
         self.connect('map-event', self._on_map)
-        self.connect('key-press-event', self._on_key_press)
         self.connect('destroy', self._on_destroy)
 
         self.show_all()
@@ -235,24 +241,10 @@ class Overlay(Gtk.Window):
 
     def _on_map(self, _widget, _event):
         self._position_window()
-        self._focus_for_cancel()
-        # Mutter may ignore activation requests made in the map callback itself;
-        # retry after it has registered the new XWayland surface.
-        GLib.timeout_add(100, self._focus_for_cancel)
-        GLib.timeout_add(300, self._focus_for_cancel)
-        # Some X11 window managers apply their final placement just after map.
+        # Window managers may ignore the initial placement request while the
+        # surface is being mapped, so repeat it after allocation settles.
         GLib.timeout_add(100, self._position_window)
         return False
-
-    def _focus_for_cancel(self):
-        if self.state == 'cancelled':
-            return GLib.SOURCE_REMOVE
-        gdk_window = self.get_window()
-        if gdk_window:
-            gdk_window.focus(Gdk.CURRENT_TIME)
-        self.present_with_time(Gdk.CURRENT_TIME)
-        self.grab_focus()
-        return GLib.SOURCE_REMOVE
 
     def _position_window(self):
         display = self.get_display()
@@ -327,7 +319,6 @@ class Overlay(Gtk.Window):
         self.mic_icon.hide()
         self.transcribing_label.set_opacity(1.0)
         self.transcribing_label.show()
-        self._focus_for_cancel()
         GLib.idle_add(self._position_window)
         GLib.timeout_add(60, self._pulse_label)
         return GLib.SOURCE_REMOVE
@@ -348,19 +339,13 @@ class Overlay(Gtk.Window):
         self.transcribing_label.set_opacity(opacity)
         return True
 
-    def _on_key_press(self, _widget, event):
-        if self.state in ('recording', 'transcribing') and \
-                event.keyval == Gdk.KEY_Escape:
-            self._cancel()
-            return True
-        return False
-
     def _cancel(self, _button=None):
         if self.state == 'cancelled':
             return
         previous_state = self.state
         self.state = 'cancelled'
         self._mark_cancelled()
+        self._unlink(self.state_file)
 
         recorder_pid = self._read_pid(self.recorder_pid_file)
         if recorder_pid:
@@ -449,8 +434,8 @@ def parse_args():
     parser.add_argument('--overlay-pid-file')
     parser.add_argument('--transcriber-pid-file')
     parser.add_argument('--cancel-file')
-    parser.add_argument('--background-color', default='#0e1110eb')
-    parser.add_argument('--accent-color', default='#32d870')
+    parser.add_argument('--background-color', default='#0f0f0feb')
+    parser.add_argument('--accent-color', default='#10a37fff')
     parser.add_argument('--state-file')
     return parser.parse_args()
 

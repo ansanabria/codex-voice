@@ -1,16 +1,62 @@
 appId: io.github.andy_spike.CodexVoice.Settings
 productName: Codex Voice Settings
 linux:
-  target:
-    - AppImage
+  target: deb
   category: Utility
+  icon: ../distribution/codex-voice.png
   syncDesktopName: true
   desktop:
     entry:
       StartupWMClass: codex-voice-settings
   artifactName: codex-voice-settings-${version}-x86_64.${ext}
+deb:
+  # electron-builder installs an AppArmor profile for Ubuntu 24.04+ so
+  # Chromium can create the user namespace required by its sandbox.
+  artifactName: codex-voice-settings-${version}-x86_64.deb
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+    - alsa-utils
+    - wl-clipboard
+    - ydotool
+    - python3
+    - python3-gi
+    - python3-cairo
+    - gir1.2-gtk-3.0
+    - libglib2.0-bin
+  recommends:
+    - gnome-shell
+    - libappindicator3-1
+  afterInstall: ../packaging/deb-after-install.sh
+  afterRemove: ../packaging/deb-after-remove.sh
 files:
   - dist/**
   - dist-electron/**
   - package.json
+extraResources:
+  - from: ../target/release/codex-voice
+    to: codex-voice/codex-voice
+  - from: ../packaging/resources/codex-asr
+    to: codex-voice/codex-asr
+  - from: ../src/overlay.py
+    to: codex-voice/overlay.py
+  - from: ../schemas/io.github.andy_spike.CodexVoice.gschema.xml
+    to: codex-voice/io.github.andy_spike.CodexVoice.gschema.xml
+  - from: ../extension
+    to: codex-voice/extension
+  - from: ../scripts/gnome-custom-shortcuts.py
+    to: codex-voice/gnome-custom-shortcuts.py
+  - from: ../packaging/codex-voice-session-setup.sh
+    to: codex-voice/codex-voice-session-setup.sh
+  - from: ../distribution/io.github.andy_spike.CodexVoice.desktop
+    to: codex-voice/io.github.andy_spike.CodexVoice.desktop
+  - from: ../distribution/codex-voice.png
+    to: codex-voice/codex-voice.png
 asar: true

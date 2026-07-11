@@ -11,6 +11,11 @@ __pycache__/
 *.sqlite-shm
 *.sqlite-wal
 /target/
+/packaging/resources/codex-asr
 node_modules/
 dist/
 dist-electron/
+dogfood-output/
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/live/

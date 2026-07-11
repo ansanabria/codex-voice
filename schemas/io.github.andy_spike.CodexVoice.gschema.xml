@@ -10,16 +10,20 @@
       <summary>Global dictation shortcut</summary>
     </key>
     <key name="pill-background-color" type="s">
-      <default>'#0e1110eb'</default>
+      <default>'#0f0f0feb'</default>
       <summary>Recording pill background colour</summary>
     </key>
     <key name="pill-accent-color" type="s">
-      <default>'#32d870'</default>
+      <default>'#10a37fff'</default>
       <summary>Recording pill accent colour</summary>
     </key>
     <key name="language" type="s">
       <default>'auto'</default>
       <summary>Transcription language hint</summary>
+    </key>
+    <key name="show-tray-icon" type="b">
+      <default>true</default>
+      <summary>Show the Codex Voice indicator in the GNOME top bar</summary>
     </key>
   </schema>
 </schemalist>
