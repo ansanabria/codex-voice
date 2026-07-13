@@ -9,3 +9,7 @@ This project has a captured design system. Consult these files before UI work:
 - **`.impeccable/design.json`** — machine-readable sidecar with tonal ramps, motion tokens, and self-contained component HTML/CSS snippets.
 
 The design system is dark-first, near-monochrome with a single ChatGPT Green accent. Depth is tonal, not shadowed. Settings apply instantly with visible feedback. The overlay pill is the signature component.
+
+## Additional instructions
+
+- For any temporary files you generate, put them in the ignored directory `./tmp/`.

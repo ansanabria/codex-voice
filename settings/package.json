@@ -12,8 +12,9 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on tcp:5173 && electron .\"",
-    "build": "cargo build --release --manifest-path ../Cargo.toml && ../packaging/fetch-codex-asr.sh && tsc -p tsconfig.electron.json && vite build && electron-builder --linux deb",
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc -p tsconfig.electron.json && vite build",
+    "package:deb": "electron-builder --linux deb",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },

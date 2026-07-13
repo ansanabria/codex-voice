@@ -14,7 +14,7 @@ Developers and power users on Ubuntu 24.04/26.04 with GNOME Shell 46 or 50. They
 
 ## Product Purpose
 
-codex-voice is push-to-talk voice dictation for Linux. It records audio on a global shortcut, transcribes it through codex-asr using an existing Codex login, and pastes the result into whatever has focus. The GNOME Shell extension provides a native top-bar menu and global shortcut. The CLI renders the recording pill with Python and GTK3 through XWayland for deterministic placement on Wayland and X11 sessions. The settings app (Electron + React) manages enabled state, keybinding, pill appearance, and language detection. Success is dictating a paragraph in one breath, seeing it appear in the focused window, and never thinking about the tool again.
+codex-voice is push-to-talk voice dictation for Linux. It records audio on a global shortcut, transcribes it through codex-asr using an existing Codex login, and pastes the result into whatever has focus. The GNOME Shell extension provides a native top-bar menu and global shortcut. The CLI renders the recording pill with Python and GTK3 through XWayland for deterministic placement on Wayland and X11 sessions. The settings app (Electron + React) manages enabled state, keybinding, and language detection. Success is dictating a paragraph in one breath, seeing it appear in the focused window, and never thinking about the tool again.
 
 ## Positioning
 
@@ -38,7 +38,7 @@ Legacy dense settings dialogs — flat, gray-on-gray, no visual hierarchy. Funct
 
 - **Invisible until needed.** The overlay appears during recording and disappears after. The settings app is a rare visit. Design for moments of attention, not constant interaction — every screen should open fast, communicate clearly, and get out of the way.
 - **Native, not Electron-y.** Feel like it shipped with GNOME. Match system conventions for spacing, typography, and color. Avoid tabs, wizards, and app-store chrome. One window, clear sections, immediate apply.
-- **Show, don't tell.** The pill preview demonstrates appearance live. The waveform shows recording levels. Settings changes apply instantly with visible feedback. Demonstrate state visually rather than describing it in prose.
+- **Show, don't tell.** The fixed pill preview demonstrates the recording state. The waveform shows recording levels. Settings changes apply instantly with visible feedback. Demonstrate state visually rather than describing it in prose.
 - **Every pixel earns its place.** No decorative borders, no gradient accents, no animation for its own sake. Structure comes from spacing and typography, not from cards-within-cards or visual chrome. If removing an element doesn't change comprehension, it shouldn't be there.
 - **Quiet confidence.** The tool is confident in what it does. No onboarding tours, no empty-state illustrations, no "Welcome!" headers. Calm surfaces, precise labels, immediate function.
 

@@ -1,18 +1,22 @@
 appId: io.github.andy_spike.CodexVoice.Settings
 productName: Codex Voice Settings
+directories:
+  output: ../dist
 linux:
   target: deb
+  executableName: codex-voice-settings
   category: Utility
   icon: ../distribution/codex-voice.png
   syncDesktopName: true
   desktop:
     entry:
       StartupWMClass: codex-voice-settings
-  artifactName: codex-voice-settings-${version}-x86_64.${ext}
+  artifactName: codex-voice-${version}-x86_64.${ext}
 deb:
   # electron-builder installs an AppArmor profile for Ubuntu 24.04+ so
   # Chromium can create the user namespace required by its sandbox.
-  artifactName: codex-voice-settings-${version}-x86_64.deb
+  packageName: codex-voice
+  artifactName: codex-voice-${version}-x86_64.deb
   depends:
     - libgtk-3-0
     - libnotify4

@@ -9,14 +9,6 @@
       <default>["&lt;Control&gt;&lt;Super&gt;space"]</default>
       <summary>Global dictation shortcut</summary>
     </key>
-    <key name="pill-background-color" type="s">
-      <default>'#0f0f0feb'</default>
-      <summary>Recording pill background colour</summary>
-    </key>
-    <key name="pill-accent-color" type="s">
-      <default>'#10a37fff'</default>
-      <summary>Recording pill accent colour</summary>
-    </key>
     <key name="language" type="s">
       <default>'auto'</default>
       <summary>Transcription language hint</summary>

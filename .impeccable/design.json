@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-07-10T00:00:00Z",
+  "generatedAt": "2026-07-12T09:15:00Z",
   "title": "Design System: Codex Voice",
   "extensions": {
     "colorMeta": {
@@ -76,13 +76,8 @@
       },
       {
         "name": "waveform-pulse",
-        "value": "wave 800ms ease-in-out infinite alternate",
-        "purpose": "Pill preview waveform animation. Scales Y to 1.35x at peak, creating a live-audio feel."
-      },
-      {
-        "name": "transcribing-pulse",
-        "value": "opacity 0.035 step at 60ms interval",
-        "purpose": "Transcribing label opacity oscillation between 0.55 and 1.0. Indicates background processing."
+        "value": "wave-bar 700ms ease-in-out infinite alternate",
+        "purpose": "Pill preview waveform animation. Scales Y between 0.25x and 1x to create a live-audio feel."
       }
     ],
     "breakpoints": [
@@ -129,25 +124,17 @@
       "name": "Overlay Pill (Recording)",
       "kind": "custom",
       "refersTo": "pill",
-      "description": "The signature component. Bottom-center floating pill during recording. Mic icon, live waveform, cancel button. Semi-transparent black background with configurable accent.",
-      "html": "<div class=\"ds-pill\"><span class=\"ds-pill-icon\">\u25CF</span><span class=\"ds-pill-waveform\">\u2581\u2583\u2586\u2588\u2586\u2583\u2581</span><button class=\"ds-pill-cancel\" aria-label=\"Cancel\">\u00d7</button></div>",
-      "css": ".ds-pill { display: flex; align-items: center; gap: 7px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 999px; padding: 7px 10px; background: rgba(15, 15, 15, 0.92); color: #FAFAFA; font-family: Inter, 'Ubuntu Sans', sans-serif; } .ds-pill-icon { color: var(--cv-accent, #10A37F); font-size: 12px; } .ds-pill-waveform { color: var(--cv-accent, #10A37F); font-size: 14px; animation: ds-wave 800ms ease-in-out infinite alternate; } @keyframes ds-wave { to { transform: scaleY(1.35); } } .ds-pill-cancel { border: 0; border-radius: 12px; background: transparent; color: #8E9692; padding: 0 4px; font-size: 14px; cursor: pointer; } .ds-pill-cancel:hover { background: rgba(255, 255, 255, 0.10); color: #FAFAFA; }"
+      "description": "The signature component. Bottom-center floating pill during recording and transcription. Fixed black fill, restrained light keyline, a left-biased waveform or loading spinner, and an inset × cancel control that remains available throughout.",
+      "html": "<div class=\"ds-pill\"><span class=\"ds-pill-waveform\">\u2581\u2583\u2586\u2588\u2586\u2583\u2581</span><button class=\"ds-pill-cancel\" aria-label=\"Cancel\">\u00d7</button></div>",
+      "css": ".ds-pill { position: relative; display: flex; min-width: 108px; min-height: 40px; align-items: center; border: 1px solid rgba(250, 250, 250, 0.32); border-radius: 999px; padding: 6px 8px; background: #0F0F0F; color: #FAFAFA; font-family: Inter, 'Ubuntu Sans', sans-serif; } .ds-pill-waveform { position: absolute; left: 16px; color: #FAFAFA; font-size: 16px; animation: ds-wave 700ms ease-in-out infinite alternate; } .ds-pill-cancel { position: absolute; right: 8px; border: 0; border-radius: 8px; background: transparent; color: #FAFAFA; font-size: 14px; cursor: pointer; } @keyframes ds-wave { from { transform: scaleY(.25); } to { transform: scaleY(1); } }"
     },
     {
       "name": "Modal Dialog",
       "kind": "custom",
       "refersTo": "card",
       "description": "Confirmation dialog for destructive actions. Fixed overlay with dimmed backdrop, centered settings card.",
-      "html": "<div class=\"ds-modal\"><div class=\"ds-modal-card\"><h2 class=\"ds-modal-title\">Reset all settings?</h2><p class=\"ds-modal-body\">This restores the shortcut, colours, language, and enabled state.</p><div class=\"ds-modal-actions\"><button class=\"ds-btn\">Cancel</button><button class=\"ds-btn-danger\">Reset</button></div></div></div>",
+      "html": "<div class=\"ds-modal\"><div class=\"ds-modal-card\"><h2 class=\"ds-modal-title\">Reset all settings?</h2><p class=\"ds-modal-body\">This restores the shortcut, language, and enabled state.</p><div class=\"ds-modal-actions\"><button class=\"ds-btn\">Cancel</button><button class=\"ds-btn-danger\">Reset</button></div></div></div>",
       "css": ".ds-modal { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.45); padding: 16px; } .ds-modal-card { border: 1px solid var(--cv-border, #2A2A2A); border-radius: 12px; background: var(--cv-surface-raised, #1A1A1A); padding: 16px; max-width: 24rem; } .ds-modal-title { margin: 0 0 8px; font-size: 16px; font-weight: 400; color: var(--cv-text, #FAFAFA); } .ds-modal-body { margin: 0 0 16px; font-size: 14px; line-height: 1.45; color: var(--cv-text-muted, #8E8E8E); } .ds-modal-actions { display: flex; gap: 8px; }"
-    },
-    {
-      "name": "Color Control",
-      "kind": "input",
-      "refersTo": "input",
-      "description": "Paired native color picker and hex text field for pill background and accent color customization.",
-      "html": "<label class=\"ds-color-control\">Pill background<span class=\"ds-color-row\"><input class=\"ds-color-native\" type=\"color\" value=\"#0f0f0f\" /><input class=\"ds-color-hex\" type=\"text\" value=\"#0f0f0f\" /></span></label>",
-      "css": ".ds-color-control { display: block; font-size: 14px; color: var(--cv-text, #FAFAFA); } .ds-color-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; } .ds-color-native { width: 42px; height: 38px; border: 0; border-radius: 8px; padding: 0; background: none; cursor: pointer; } .ds-color-hex { width: 100%; border: 1px solid var(--cv-border, #2A2A2A); border-radius: 8px; padding: 8px 10px; color: var(--cv-text, #FAFAFA); background: var(--cv-surface, #0F0F0F); font: inherit; } .ds-color-hex:focus { outline: none; border-color: var(--cv-accent, #10A37F); }"
     }
   ],
   "narrative": {
@@ -159,19 +146,19 @@
       "8px radius for controls, 12px for containers, full-pill for the overlay",
       "Inter / Ubuntu Sans — one family, multiple weights, no display pairing",
       "Settings apply instantly; every change shows visible feedback",
-      "The overlay pill is the signature component — it must feel native to GNOME"
+      "The overlay pill is a fixed black-and-white signature component that must feel native to GNOME"
     ],
     "rules": [
-      { "name": "The One Voice Rule", "body": "ChatGPT Green appears on ≤10% of any given screen. It marks active state and recording indicators — nothing else. If two green elements are visible simultaneously, one is redundant.", "section": "colors" },
+      { "name": "The One Voice Rule", "body": "ChatGPT Green appears on ≤10% of any given screen. It marks active settings controls — nothing else. If two green elements are visible simultaneously, one is redundant.", "section": "colors" },
       { "name": "The No-Tint Rule", "body": "Neutrals are pure. No green tinting in the blacks, whites, or grays. The accent carries all the chroma; the neutrals carry none.", "section": "colors" },
       { "name": "The One Family Rule", "body": "Inter everywhere. Ubuntu Sans is the system fallback on GNOME. Never introduce a second family for personality; the personality is in the restraint.", "section": "typography" },
       { "name": "The No-Eyebrow Rule", "body": "No uppercase tracked eyebrows above section headings. Section titles are sentence-case at body size.", "section": "typography" },
       { "name": "The Flat-By-Default Rule", "body": "No element casts a shadow at rest. Depth is tonal: surface, raised surface, and border. Shadows are reserved for state and are always accent-colored, never gray.", "section": "elevation" }
     ],
     "dos": [
-      "Do use ChatGPT Green (#10A37F) only for active state, recording indicators, and the waveform. It appears on ≤10% of any screen.",
+      "Do use ChatGPT Green (#10A37F) only for active state and controls in the settings app. It appears on ≤10% of any screen.",
       "Do convey depth with tonal layering (surface → raised surface) and hairline borders, never with shadows.",
-      "Do apply settings instantly with visible feedback — the pill preview, the waveform, the checkbox state. No Save button.",
+      "Do apply settings instantly with visible feedback — the fixed pill preview, the waveform, the checkbox state. No Save button.",
       "Do use 8px radius for controls and 12px for containers. Full-pill (999px) is reserved for the overlay pill and pill-preview elements.",
       "Do respect prefers-color-scheme — the system is dark-first but must invert cleanly. The accent stays #10A37F in both modes.",
       "Do keep the settings app to one scrollable column at max-width: 768px. No tabs, no sidebar."

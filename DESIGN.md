@@ -60,7 +60,7 @@ components:
     backgroundColor: "#0F0F0F"
     textColor: "{colors.text}"
     rounded: "{rounded.pill}"
-    padding: "7px 10px"
+    padding: "6px 8px"
 ---
 
 # Design System: Codex Voice
@@ -73,7 +73,7 @@ Codex Voice is a system utility, not an application. The design system reflects 
 
 The palette follows OpenAI's brand language: near-black surfaces (`#0F0F0F`), off-white text (`#FAFAFA`), and a single signature teal-green accent (`#10A37F`) — the same green on the ChatGPT send button and streaming-response indicators. In a market full of neon-purple AI brands, this near-monochrome with one chromatic voice reads as the steady incumbent. The system is dark-first; light mode inverts the neutrals and keeps the same accent.
 
-This system explicitly rejects bloated Electron settings panels (Discord, Spotify) with nested tabs, setup wizards, and unnecessary chrome. It rejects playful AI app aesthetics — gradient mascots, bouncy animations, rounded-everything. It rejects legacy dense settings dialogs with no visual hierarchy. The pill overlay rejects anything that competes with the user's focused window: no large surfaces, no bright colors beyond the accent indicator, no animation beyond the live waveform.
+This system explicitly rejects bloated Electron settings panels (Discord, Spotify) with nested tabs, setup wizards, and unnecessary chrome. It rejects playful AI app aesthetics — gradient mascots, bouncy animations, rounded-everything. It rejects legacy dense settings dialogs with no visual hierarchy. The pill overlay rejects anything that competes with the user's focused window: no large surfaces, no chromatic accents, and no animation beyond the live waveform.
 
 **Key Characteristics:**
 - Dark-first, near-monochrome palette with a single teal-green accent
@@ -88,7 +88,7 @@ This system explicitly rejects bloated Electron settings panels (Discord, Spotif
 A near-monochrome palette with one chromatic voice. OpenAI's restraint is the doctrine: black, off-white, and a single teal-green that earns its visibility through scarcity.
 
 ### Primary
-- **ChatGPT Green** (`#10A37F`): The single accent. Used on the recording indicator, the waveform bars, the shortcut-capture glow, checkbox accents, and the SVG mic icon. Never used as a large fill or a background. Its rarity is the point.
+- **ChatGPT Green** (`#10A37F`): The single accent. Used on the shortcut-capture glow, checkbox accents, and the SVG mic icon. Never used as a large fill or a background. Its rarity is the point.
 
 ### Neutral
 - **OpenAI Black** (`#0F0F0F`): The base surface in dark mode — the settings window background and the overlay pill background. A true near-black with no tint, matching OpenAI's brand black.
@@ -158,16 +158,14 @@ The modal overlay uses a backdrop dim (`rgba(0, 0, 0, 0.45)`) to separate itself
 ### Inputs / Fields
 - **Style:** 1px Hairline border, surface background (`#0F0F0F` — one step below the card), 8px radius, 8px 10px padding
 - **Focus:** Inherit browser default focus ring. No custom glow.
-- **Color Picker:** Native `<input type="color">` at 2.6rem × 2.4rem, no border, 8px radius. Paired with a hex text field.
 
 ### Pills (Signature Component)
 The overlay pill is the product's defining visual element. It appears during recording and transcription, then vanishes.
-- **Shape:** Full pill (999px radius, or 19px in GTK / 22px in GNOME Shell — native conventions differ slightly)
-- **Background:** User-configurable, defaulting to semi-transparent OpenAI Black (`#0F0F0FEB`)
-- **Border:** 1px `rgba(255, 255, 255, 0.12)` — a hairline that reads on any background color
-- **Content:** Mic icon (ChatGPT Green), live waveform (ChatGPT Green, animated), cancel button (muted gray)
-- **Transcribing State:** Waveform hides, "Transcribing…" label pulses opacity 0.55 → 1.0
-- **Cancel Button:** 12px radius, muted gray (`#8E9692`), transparent background, hover reveals `rgba(255, 255, 255, 0.10)`
+- **Shape:** Compact full pill (999px radius, 108px × 40px in GTK)
+- **Background:** Fixed OpenAI Black (`#0F0F0F`), fully opaque in every system theme
+- **Border:** 1px `rgba(250, 250, 250, 0.32)` — visible enough to define the surface, quiet enough to recede.
+- **Content:** A slightly left-biased nine-bar off-white live waveform and a compact off-white × control, inset 8px from the trailing edge; it matches the settings preview exactly.
+- **Transcribing State:** Waveform is replaced by a compact off-white loading spinner; the × control remains visible and active
 
 ### Modal
 - **Backdrop:** `position: fixed`, `inset: 0`, `rgba(0, 0, 0, 0.45)` dim, `place-items: center`
@@ -179,11 +177,11 @@ None. The settings app is a single-window, single-scroll layout. No tabs, no sid
 ## 6. Do's and Don'ts
 
 ### Do:
-- **Do** use ChatGPT Green (`#10A37F`) only for active state, recording indicators, and the waveform. It appears on ≤10% of any screen.
+- **Do** use ChatGPT Green (`#10A37F`) only for active state and controls in the settings app. It appears on ≤10% of any screen.
 - **Do** convey depth with tonal layering (surface → raised surface) and hairline borders, never with shadows.
-- **Do** apply settings instantly with visible feedback — the pill preview, the waveform, the checkbox state. No "Save" button.
+- **Do** apply settings instantly with visible feedback — the fixed pill preview, the waveform, the checkbox state. No "Save" button.
 - **Do** use 8px radius for controls and 12px for containers. Full-pill (999px) is reserved for the overlay pill and pill-preview elements.
-- **Do** respect `prefers-color-scheme` — the system is dark-first but must invert cleanly. The accent stays `#10A37F` in both modes.
+- **Do** respect `prefers-color-scheme` in the settings app. The overlay pill stays fixed black and white in every system theme.
 - **Do** keep the settings app to one scrollable column at `max-width: 768px`. No tabs, no sidebar.
 
 ### Don't:

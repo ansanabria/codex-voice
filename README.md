@@ -34,8 +34,11 @@ On supported GNOME versions, the Shell extension provides the top-bar menu and g
 The `.deb` is the complete installer. It bundles the CLI, `codex-asr`, the GTK pill, the GSettings schema, the GNOME extension, shortcut setup, a desktop entry, an icon, and the settings app. `apt` pulls in the required runtime packages automatically.
 
 ```bash
-sudo apt install ./settings/dist/codex-voice-settings-0.1.0-x86_64.deb
+sudo apt remove codex-voice-settings # required once for the old package name
+sudo apt install ./dist/codex-voice-0.1.0-x86_64.deb
 ```
+
+This is an intentional clean package-name break. The new package does not replace the old `codex-voice-settings` Debian package automatically, so remove it first. Removal without purge preserves the existing GSettings preferences.
 
 After install:
 
@@ -46,10 +49,11 @@ After install:
 
 ```bash
 cargo test
-cd settings && npm install && npm run build
+npm --prefix settings install
+./build.sh
 ```
 
-This produces the `.deb` at `settings/dist/`.
+This produces the complete product `.deb` in `dist/`. The settings workspace's `npm run build` command builds only the Electron adapter; product orchestration belongs to the root `build.sh`.
 
 ## Usage
 
@@ -87,7 +91,7 @@ The Electron renderer is React + TypeScript + Vite + Tailwind CSS v4. Its preloa
 ## Uninstall
 
 ```bash
-sudo apt remove codex-voice-settings  # remove the application
+sudo apt remove codex-voice           # remove the application
 ./scripts/uninstall.sh                # also clean legacy per-user files
 ./scripts/uninstall.sh --purge        # also reset saved preferences
 ```

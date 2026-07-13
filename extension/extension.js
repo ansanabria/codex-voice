@@ -6,6 +6,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Compat from './compat.js';
+import { parseRuntimeStateText } from './protocol.js';
 
 const UUID = 'codex-voice@andy-spike.github.io';
 const RUNTIME_DIR = GLib.getenv('XDG_RUNTIME_DIR') || '/tmp';
@@ -58,7 +59,10 @@ export default class CodexVoiceExtension extends Extension {
         }
         if (this._indicator) return;
         this._indicator = new PanelMenu.Button(0.0, 'Codex Voice');
-        this._indicator.add_child(new St.Icon({ icon_name: 'audio-input-microphone-symbolic', style_class: 'system-status-icon' }));
+        const icon = new Gio.FileIcon({
+            file: this.dir.get_child('icons').get_child('codex-voice-panel.png'),
+        });
+        this._indicator.add_child(new St.Icon({ gicon: icon, style_class: 'system-status-icon' }));
         this._stateItem = new PopupMenu.PopupMenuItem('Idle', { reactive: false });
         this._actionItem = new PopupMenu.PopupMenuItem('Start Dictation');
         this._actionItem.connect('activate', () => {
@@ -114,8 +118,7 @@ export default class CodexVoiceExtension extends Extension {
     _readState() {
         try {
             const [, bytes] = Gio.File.new_for_path(STATE_FILE).load_contents(null);
-            const state = JSON.parse(new TextDecoder().decode(bytes)).state;
-            this._state = ['recording', 'transcribing', 'typing'].includes(state) ? state : 'idle';
+            this._state = parseRuntimeStateText(new TextDecoder().decode(bytes));
         } catch (_) { this._state = 'idle'; }
         this._updateStatePresentation();
         if (this._state !== 'idle' && !this._escapeId)

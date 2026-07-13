@@ -16,6 +16,9 @@ node_modules/
 dist/
 dist-electron/
 dogfood-output/
+/tmp/
 .impeccable/config.local.json
 .impeccable/hook.cache.json
 .impeccable/live/
+tmp/
+.codex/
