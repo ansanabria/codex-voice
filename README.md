@@ -1,8 +1,8 @@
-# Codex Voice
-
 <p align="left">
   <img src="distribution/codex-voice.png" alt="Codex Voice" width="128" />
 </p>
+
+# Codex Voice
 
 Push-to-talk voice dictation for Linux, powered by `codex-asr` and an existing Codex login.
 
