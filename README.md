@@ -4,7 +4,7 @@
 
 # Codex Voice
 
-Push-to-talk voice dictation for Linux, powered by `codex-asr` and an existing Codex login.
+Push-to-talk voice dictation for Ubuntu 24.04 and 26.04 with GNOME Shell 46 or 50, powered by `codex-asr` and an existing Codex login.
 
 > **Unofficial project.** codex-voice is not affiliated with, endorsed by, or supported by OpenAI or the Codex team. There is no warranty and no support channel. Use it at your own risk.
 
