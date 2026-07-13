@@ -41,8 +41,15 @@ On supported GNOME versions, the Shell extension provides the top-bar menu and g
 
 The `.deb` is the complete installer. It bundles the CLI, `codex-asr`, the GTK pill, the GSettings schema, the GNOME extension, shortcut setup, a desktop entry, an icon, and the settings app. `apt` pulls in the required runtime packages automatically.
 
+Download the `deb` package:
+
 ```bash
 curl -L -o codex-voice-0.1.0-x86_64.deb https://github.com/ansanabria/codex-voice/releases/download/v0.1.0/codex-voice-0.1.0-x86_64.deb
+```
+
+Install the package:
+
+```bash
 sudo apt install ./codex-voice-0.1.0-x86_64.deb
 ```
 
