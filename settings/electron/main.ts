@@ -1,11 +1,11 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeTheme } from "electron";
+import { app, BrowserWindow, clipboard, ipcMain, Menu, nativeTheme } from "electron";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { promisify } from "node:util";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { BOOLEAN_SETTINGS_KEYS, SETTINGS_KEYS, parseSettings, parseStatus, type AppInfo, type SettingsDocument, type SettingsKey } from "./contract.js";
+import { BOOLEAN_SETTINGS_KEYS, SETTINGS_KEYS, parseHistory, parseSettings, parseStatus, type AppInfo, type SettingsDocument, type SettingsKey } from "./contract.js";
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -51,11 +51,30 @@ async function showPreview() {
 }
 
 async function closePreview() {
+  const child = previewProcess;
   await execFileAsync(cli(), ["--close-preview"], {
     shell: false,
     windowsHide: true,
     timeout: 5000
   });
+  if (child && child.exitCode === null) {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error("Preview did not close within 5 seconds"));
+      }, 5000);
+      const cleanup = () => {
+        clearTimeout(timer);
+        child.removeListener("exit", onExit);
+        child.removeListener("error", onError);
+      };
+      const onExit = () => { cleanup(); resolve(); };
+      const onError = (error: Error) => { cleanup(); reject(error); };
+      child.once("exit", onExit);
+      child.once("error", onError);
+      if (child.exitCode !== null) onExit();
+    });
+  }
 }
 
 function windowBackground() {
@@ -73,6 +92,11 @@ async function runSettings(args: string[]): Promise<SettingsDocument> {
     maxBuffer: 1024 * 1024
   });
   return parseSettings(stdout);
+}
+
+async function runHistory(args: string[]) {
+  const { stdout } = await execFileAsync(cli(), ["history", ...args], { shell: false, windowsHide: true, maxBuffer: 4 * 1024 * 1024 });
+  return stdout;
 }
 
 function rememberSettings(settings: SettingsDocument) {
@@ -188,6 +212,19 @@ app.whenReady().then(async () => {
     return rememberSettings(await runSettings(["set", key, String(value)]));
   });
   ipcMain.handle("codex-voice:reset", async () => rememberSettings(await runSettings(["reset"])));
+  ipcMain.handle("codex-voice:history-load", async (_event, offset: unknown, limit: unknown, query: unknown) => {
+    if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(limit) || typeof query !== "string") throw new Error("Invalid history query");
+    return parseHistory(await runHistory(["list", String(offset), String(limit), query]));
+  });
+  ipcMain.handle("codex-voice:history-copy", (_event, text: unknown) => {
+    if (typeof text !== "string") throw new Error("Transcript text must be a string");
+    clipboard.writeText(text);
+  });
+  ipcMain.handle("codex-voice:history-delete", async (_event, id: unknown) => {
+    if (!Number.isSafeInteger(id)) throw new Error("Invalid transcript id");
+    await runHistory(["delete", String(id)]);
+  });
+  ipcMain.handle("codex-voice:history-clear", async () => { await runHistory(["clear"]); });
   ipcMain.handle("codex-voice:show-preview", showPreview);
   ipcMain.handle("codex-voice:close-preview", closePreview);
   ipcMain.handle("codex-voice:app-info", async () => ({

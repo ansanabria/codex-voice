@@ -26,6 +26,17 @@ function runCli(args) {
     }
 }
 
+function runCliAndWait(args, callback) {
+    try {
+        const process = new Gio.Subprocess({ argv: [cliPath(), ...args], flags: Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE });
+        process.init(null);
+        process.wait_check_async(null, (_process, result) => {
+            try { callback(process.wait_check_finish(result)); }
+            catch (_) { callback(false); }
+        });
+    } catch (_) { callback(false); }
+}
+
 export default class CodexVoiceExtension extends Extension {
     enable() {
         this._settings = this._loadSettings();
@@ -54,7 +65,7 @@ export default class CodexVoiceExtension extends Extension {
     _syncIndicatorVisibility() {
         if (!this._settings.get_boolean('show-tray-icon')) {
             this._indicator?.destroy();
-            this._indicator = this._stateItem = this._actionItem = this._enabledItem = null;
+            this._indicator = this._stateItem = this._actionItem = this._copyLastItem = this._enabledItem = null;
             return;
         }
         if (this._indicator) return;
@@ -69,17 +80,32 @@ export default class CodexVoiceExtension extends Extension {
             this._readState();
             runCli([this._state === 'recording' ? '--stop' : this._state === 'idle' ? '--start' : '--cancel']);
         });
+        this._copyLastItem = new PopupMenu.PopupMenuItem('Copy last transcript');
+        this._copyLastItem.setSensitive(false);
+        this._copyLastItem.connect('activate', () => runCliAndWait(['--copy-last'], success => {
+            if (!success || !this._copyLastItem) return;
+            this._copyLastItem.label.text = 'Copied';
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
+                if (this._copyLastItem) this._copyLastItem.label.text = 'Copy last transcript';
+                return GLib.SOURCE_REMOVE;
+            });
+        }));
         this._enabledItem = new PopupMenu.PopupSwitchMenuItem('Dictation Enabled', this._settings.get_boolean('enabled'));
         this._enabledItem.connect('toggled', (_item, active) => this._settings.set_boolean('enabled', active));
         const settings = new PopupMenu.PopupMenuItem('Settings');
         settings.connect('activate', () => runCli(['--settings']));
         this._indicator.menu.addMenuItem(this._stateItem);
         this._indicator.menu.addMenuItem(this._actionItem);
+        this._indicator.menu.addMenuItem(this._copyLastItem);
         this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         this._indicator.menu.addMenuItem(this._enabledItem);
         this._indicator.menu.addMenuItem(settings);
         Main.panel.addToStatusArea(UUID, this._indicator);
+        this._indicator.menu.connect('open-state-changed', (_menu, open) => {
+            if (open) this._refreshCopyLastAvailability();
+        });
         this._readState();
+        this._refreshCopyLastAvailability();
     }
 
     _loadSettings() {
@@ -108,6 +134,10 @@ export default class CodexVoiceExtension extends Extension {
         const enabled = this._settings.get_boolean('enabled');
         this._enabledItem?.setToggleState(enabled);
         this._registerShortcut();
+    }
+
+    _refreshCopyLastAvailability() {
+        runCliAndWait(['history', 'has'], success => this._copyLastItem?.setSensitive(success));
     }
 
     _scheduleStateRead() {
@@ -149,7 +179,7 @@ export default class CodexVoiceExtension extends Extension {
         this._monitor?.cancel();
         Compat.disconnectEscape(this._escapeId);
         this._indicator?.destroy();
-        this._monitor = this._indicator = this._stateItem = this._actionItem = this._enabledItem = null;
+        this._monitor = this._indicator = this._stateItem = this._actionItem = this._copyLastItem = this._enabledItem = null;
         this._escapeId = 0;
     }
 }

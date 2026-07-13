@@ -172,7 +172,7 @@ The overlay pill is the product's defining visual element. It appears during rec
 - **Content:** A settings card (12px radius, raised surface) at `max-width: 24rem`
 
 ### Navigation
-None. The settings app is a single-window, single-scroll layout. No tabs, no sidebar, no breadcrumbs. Sections stack vertically with 16px gaps. This is deliberate — the app has four sections, not four pages.
+The settings app uses exactly two top-level tabs: General and Transcriptions. Tabs use a quiet full-width line treatment and accessible keyboard navigation. No sidebar, breadcrumbs, nested tabs, or deeper navigation.
 
 ## 6. Do's and Don'ts
 
@@ -189,7 +189,7 @@ None. The settings app is a single-window, single-scroll layout. No tabs, no sid
 - **Don't** use ChatGPT Green as a large fill, gradient, or background. It is an indicator color, not a surface color.
 - **Don't** pair `border: 1px solid X` with `box-shadow: 0 Npx Mpx` (M ≥ 16px) on the same element. Pick a border OR a shadow, never both as decoration.
 - **Don't** use border-radius greater than 12px on cards or inputs. 24px, 32px, 40px on a container is the over-rounding tell.
-- **Don't** add tabs, setup wizards, onboarding tours, or empty-state illustrations to the settings app. It is a system preference pane, not an application.
+- **Don't** add tabs beyond the two top-level General and Transcriptions views, setup wizards, onboarding tours, or empty-state illustrations. It is a system preference pane, not an application.
 - **Don't** tint neutrals toward green or any other hue. The blacks, whites, and grays are pure — the accent carries all chroma.
 - **Don't** use gradient text (`background-clip: text` + gradient). Emphasis comes from weight or size, not from color effects.
 - **Don't** use uppercase tracked eyebrows above section headings. Section titles are sentence-case at body size.

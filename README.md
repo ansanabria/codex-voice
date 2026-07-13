@@ -4,9 +4,13 @@
 
 # Codex Voice
 
-Push-to-talk voice dictation for Ubuntu 24.04 and 26.04 with GNOME Shell 46 or 50, powered by `codex-asr` and an existing Codex login.
+Push-to-talk voice dictation for Ubuntu 24.04 and 26.04 with GNOME Shell 46 or 50, powered by the same voice-to-text models the Codex App uses.
 
-> **Unofficial project.** codex-voice is not affiliated with, endorsed by, or supported by OpenAI or the Codex team. There is no warranty and no support channel. Use it at your own risk.
+> **Unofficial project.** Codex Voice is not affiliated with, endorsed by, or supported by OpenAI or the Codex team. There is no warranty and no support channel. Use it at your own risk.
+
+## Why I needed this
+
+I've been using agents for quite a while, and recently I've grown to like using voice-to-text to communicate my ideas to agents. I used Handy for quite some time, but I didn't quite end up liking the local voice-to-text models. OpenAI's models, on the other hand, are excellent for voice-to-text and in particular the Codex App has this feature. Since on Linux there's still no Codex App (and I think there probably won't be for quite some time), I decided to implement the voice-to-text feature using an existing ChatGPT Plus/Pro subscription, meaning we can use the same models as the Codex App.
 
 ## What it does
 
@@ -22,7 +26,7 @@ Push-to-talk voice dictation for Ubuntu 24.04 and 26.04 with GNOME Shell 46 or 5
 | 24.04 LTS | 46          | yes     | yes |
 | 26.04 LTS | 50          | yes     | yes |
 
-Other GNOME versions may work, but have not been tested and cannot be supported.
+Other GNOME versions may work, but have not been tested and I can't support them. I try to support the latest stable versions because those are the ones most people use.
 
 On supported GNOME versions, the Shell extension provides the top-bar menu and global shortcut. The CLI renders the pill with Python, GTK3, and XWayland so it positions consistently on both Wayland and X11.
 
@@ -43,8 +47,7 @@ sudo apt install ./dist/codex-voice-0.1.0-x86_64.deb
 
 After install:
 
-- The AppArmor profile needed by Chromium's renderer sandbox is registered (Ubuntu 24.04+).
-- On the next GNOME login, the extension is enabled automatically. If the shell is unsupported, a legacy global shortcut is configured instead.
+- On the next GNOME login, the extension is enabled automatically. Log out and log back in to apply it. If the shell is unsupported, a legacy global shortcut is configured instead.
 
 ### Build from source
 
@@ -100,3 +103,5 @@ sudo apt remove codex-voice           # remove the application
 ## Disclaimer
 
 Codex Voice is an independent, community project. It is **not** developed or supported by OpenAI. Issues, bugs, and feature requests should not be directed at OpenAI or the Codex team. There is no guarantee of continued maintenance or compatibility with future Codex changes.
+
+In particular, things may change after the migration from the old Codex App to the new ChatGPT App that OpenAI is currently doing. If you catch any bugs, please open an issue.

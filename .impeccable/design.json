@@ -161,14 +161,14 @@
       "Do apply settings instantly with visible feedback — the fixed pill preview, the waveform, the checkbox state. No Save button.",
       "Do use 8px radius for controls and 12px for containers. Full-pill (999px) is reserved for the overlay pill and pill-preview elements.",
       "Do respect prefers-color-scheme — the system is dark-first but must invert cleanly. The accent stays #10A37F in both modes.",
-      "Do keep the settings app to one scrollable column at max-width: 768px. No tabs, no sidebar."
+      "Do keep the settings app to one scrollable column at max-width: 768px, with exactly two top-level tabs and no sidebar."
     ],
     "donts": [
       "Don't use border-left or border-right greater than 1px as a colored accent stripe. The current .override class violates this — rewrite it.",
       "Don't use ChatGPT Green as a large fill, gradient, or background. It is an indicator color, not a surface color.",
       "Don't pair border: 1px solid X with box-shadow: 0 Npx Mpx (M ≥ 16px) on the same element. Pick a border OR a shadow, never both.",
       "Don't use border-radius greater than 12px on cards or inputs.",
-      "Don't add tabs, setup wizards, onboarding tours, or empty-state illustrations to the settings app.",
+      "Don't add tabs beyond the top-level General and Transcriptions views, setup wizards, onboarding tours, or empty-state illustrations to the settings app.",
       "Don't tint neutrals toward green or any other hue. The accent carries all chroma.",
       "Don't use gradient text (background-clip: text + gradient).",
       "Don't use uppercase tracked eyebrows above section headings.",

@@ -15,6 +15,7 @@ fn parse_args(args: &[String]) -> io::Result<Command> {
         [flag] if flag == "--preview" => Ok(Command::Preview),
         [flag] if flag == "--close-preview" => Ok(Command::ClosePreview),
         [flag] if flag == "--version" => Ok(Command::Version),
+        [flag] if flag == "--copy-last" => Ok(Command::CopyLastTranscript),
         [settings, command] if settings == "settings" && command == "get" => {
             Ok(Command::SettingsGet)
         }
@@ -27,6 +28,60 @@ fn parse_args(args: &[String]) -> io::Result<Command> {
                 value: value.clone(),
             })
         }
+        [history, command, offset, limit] if history == "history" && command == "list" => {
+            Ok(Command::HistoryList {
+                offset: offset.parse().map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "history offset must be an integer",
+                    )
+                })?,
+                limit: limit.parse().map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "history limit must be an integer",
+                    )
+                })?,
+                query: String::new(),
+            })
+        }
+        [history, command, offset, limit, query] if history == "history" && command == "list" => {
+            Ok(Command::HistoryList {
+                offset: offset.parse().map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "history offset must be an integer",
+                    )
+                })?,
+                limit: limit.parse().map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "history limit must be an integer",
+                    )
+                })?,
+                query: query.clone(),
+            })
+        }
+        [history, command, id] if history == "history" && command == "delete" => {
+            Ok(Command::HistoryDelete {
+                id: id.parse().map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "transcript id must be an integer",
+                    )
+                })?,
+            })
+        }
+        [history, command] if history == "history" && command == "clear" => {
+            Ok(Command::HistoryClear)
+        }
+        [history, command] if history == "history" && command == "has" => {
+            Ok(Command::HistoryHasEntries)
+        }
+        [history, ..] if history == "history" => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "usage: codex-voice history list <offset> <limit> [query]|delete <id>|clear|has",
+        )),
         [flag, ..] if flag == "settings" => Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "usage: codex-voice settings get|reset|set <key> <value>",

@@ -32,10 +32,17 @@ export type AppInfo = {
 
 export type WindowState = { maximized: boolean };
 
+export type TranscriptEntry = { id: number; createdAt: number; text: string };
+export type TranscriptHistoryPage = { schemaVersion: 1; entries: TranscriptEntry[]; hasMore: boolean };
+
 export interface ElectronAdapter {
   load(): Promise<SettingsDocument>;
   update(key: SettingsKey, value: boolean | string): Promise<SettingsDocument>;
   reset(): Promise<SettingsDocument>;
+  loadHistory(offset: number, limit: number, query: string): Promise<TranscriptHistoryPage>;
+  copyTranscript(text: string): Promise<void>;
+  deleteTranscript(id: number): Promise<void>;
+  clearHistory(): Promise<void>;
   showPreview(): Promise<void>;
   closePreview(): Promise<void>;
   getAppInfo(): Promise<AppInfo>;
@@ -72,4 +79,13 @@ export function parseStatus(text: string): StatusDocument {
     throw new Error("Invalid Codex Voice status protocol document");
   }
   return value as StatusDocument;
+}
+
+export function parseHistory(text: string): TranscriptHistoryPage {
+  const value: unknown = JSON.parse(text);
+  if (!object(value) || value.schemaVersion !== 1 || !Array.isArray(value.entries) || typeof value.hasMore !== "boolean" ||
+      !value.entries.every(entry => object(entry) && Number.isSafeInteger(entry.id) && Number.isSafeInteger(entry.createdAt) && typeof entry.text === "string")) {
+    throw new Error("Invalid Codex Voice transcript history document");
+  }
+  return value as TranscriptHistoryPage;
 }

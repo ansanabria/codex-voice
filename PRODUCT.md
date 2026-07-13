@@ -37,7 +37,7 @@ Legacy dense settings dialogs — flat, gray-on-gray, no visual hierarchy. Funct
 ## Design Principles
 
 - **Invisible until needed.** The overlay appears during recording and disappears after. The settings app is a rare visit. Design for moments of attention, not constant interaction — every screen should open fast, communicate clearly, and get out of the way.
-- **Native, not Electron-y.** Feel like it shipped with GNOME. Match system conventions for spacing, typography, and color. Avoid tabs, wizards, and app-store chrome. One window, clear sections, immediate apply.
+- **Native, not Electron-y.** Feel like it shipped with GNOME. Match system conventions for spacing, typography, and color. Use only the two top-level General and Transcriptions tabs; avoid deeper navigation, wizards, and app-store chrome. One window, clear sections, immediate apply.
 - **Show, don't tell.** The fixed pill preview demonstrates the recording state. The waveform shows recording levels. Settings changes apply instantly with visible feedback. Demonstrate state visually rather than describing it in prose.
 - **Every pixel earns its place.** No decorative borders, no gradient accents, no animation for its own sake. Structure comes from spacing and typography, not from cards-within-cards or visual chrome. If removing an element doesn't change comprehension, it shouldn't be there.
 - **Quiet confidence.** The tool is confident in what it does. No onboarding tours, no empty-state illustrations, no "Welcome!" headers. Calm surfaces, precise labels, immediate function.

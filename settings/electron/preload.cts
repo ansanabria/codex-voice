@@ -1,10 +1,14 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AppInfo, ElectronAdapter, SettingsDocument, SettingsKey, WindowState } from "./contract.js";
+import type { AppInfo, ElectronAdapter, SettingsDocument, SettingsKey, TranscriptHistoryPage, WindowState } from "./contract.js";
 
 const api = {
   load: (): Promise<SettingsDocument> => ipcRenderer.invoke("codex-voice:load"),
   update: (key: SettingsKey, value: boolean | string): Promise<SettingsDocument> => ipcRenderer.invoke("codex-voice:update", key, value),
   reset: (): Promise<SettingsDocument> => ipcRenderer.invoke("codex-voice:reset"),
+  loadHistory: (offset: number, limit: number, query: string): Promise<TranscriptHistoryPage> => ipcRenderer.invoke("codex-voice:history-load", offset, limit, query),
+  copyTranscript: (text: string): Promise<void> => ipcRenderer.invoke("codex-voice:history-copy", text),
+  deleteTranscript: (id: number): Promise<void> => ipcRenderer.invoke("codex-voice:history-delete", id),
+  clearHistory: (): Promise<void> => ipcRenderer.invoke("codex-voice:history-clear"),
   showPreview: (): Promise<void> => ipcRenderer.invoke("codex-voice:show-preview"),
   closePreview: (): Promise<void> => ipcRenderer.invoke("codex-voice:close-preview"),
   getAppInfo: (): Promise<AppInfo> => ipcRenderer.invoke("codex-voice:app-info"),

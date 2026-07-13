@@ -2,6 +2,7 @@ mod product_package;
 pub mod protocol;
 mod runtime_state;
 mod settings;
+mod transcript_history;
 
 use std::env;
 use std::fs::{self, File, OpenOptions};
@@ -103,7 +104,21 @@ pub enum Command {
     ClosePreview,
     SettingsGet,
     SettingsReset,
-    SettingsSet { key: String, value: String },
+    SettingsSet {
+        key: String,
+        value: String,
+    },
+    HistoryList {
+        offset: usize,
+        limit: usize,
+        query: String,
+    },
+    HistoryDelete {
+        id: i64,
+    },
+    HistoryClear,
+    HistoryHasEntries,
+    CopyLastTranscript,
     Version,
 }
 
@@ -164,6 +179,33 @@ impl Application {
             Command::SettingsSet { key, value } => {
                 settings::set(&key, &value)?;
                 CommandOutput::text(settings::json()?)
+            }
+            Command::HistoryList {
+                offset,
+                limit,
+                query,
+            } => CommandOutput::text(transcript_history::list_json(offset, limit, &query)?),
+            Command::HistoryDelete { id } => {
+                transcript_history::delete(id)?;
+                CommandOutput::exit(0)
+            }
+            Command::HistoryClear => {
+                transcript_history::clear()?;
+                CommandOutput::exit(0)
+            }
+            Command::HistoryHasEntries => {
+                CommandOutput::exit(if transcript_history::last()?.is_some() {
+                    0
+                } else {
+                    1
+                })
+            }
+            Command::CopyLastTranscript => {
+                let Some(entry) = transcript_history::last()? else {
+                    return Ok(CommandOutput::exit(1));
+                };
+                copy_to_clipboard(&entry.text)?;
+                CommandOutput::exit(0)
             }
             Command::Version => CommandOutput::text(env!("CARGO_PKG_VERSION").to_owned()),
         };
@@ -307,7 +349,8 @@ mod dictation_session {
             return Ok(1);
         }
 
-        copy_to_clipboard(&text);
+        transcript_history::add(&text)?;
+        let _ = copy_to_clipboard(&text);
         if let Some(ydotool) = product_package::command("ydotool") {
             runtime_state::publish(paths, runtime_state::State::Typing, owner_pid)?;
             thread::sleep(Duration::from_millis(200));
@@ -481,22 +524,26 @@ fn wait_for_child(child: &mut Child) -> io::Result<ExitStatus> {
         }
     }
 }
-fn copy_to_clipboard(text: &str) {
+fn copy_to_clipboard(text: &str) -> io::Result<()> {
     let Some(wl_copy) = product_package::command("wl-copy") else {
-        return;
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "wl-copy was not found",
+        ));
     };
-    let Ok(mut child) = ProcessCommand::new(wl_copy)
+    let mut child = ProcessCommand::new(wl_copy)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .spawn()
-    else {
-        return;
-    };
+        .spawn()?;
     if let Some(mut stdin) = child.stdin.take() {
-        let _ = stdin.write_all(text.as_bytes());
+        stdin.write_all(text.as_bytes())?;
     }
-    let _ = child.wait();
+    let status = child.wait()?;
+    if !status.success() {
+        return Err(io::Error::other(format!("wl-copy exited with {status}")));
+    }
+    Ok(())
 }
 fn read_pid(path: &Path) -> Option<i32> {
     fs::read_to_string(path).ok()?.trim().parse().ok()

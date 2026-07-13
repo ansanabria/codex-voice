@@ -4,7 +4,9 @@ Version 1 is the local contract between the Rust application and Desktop Adapter
 
 ## CLI
 
-`codex-voice` or `--toggle` toggles a session. `--start`, `--stop`, and `--cancel` perform the named lifecycle operation. `--status` prints status JSON. `--settings` launches `codex-voice-settings`. `--preview` and `--close-preview` control the isolated GTK preview. `--version` prints the version. `settings get`, `settings reset`, and `settings set <key> <value>` print settings JSON after success.
+`codex-voice` or `--toggle` toggles a session. `--start`, `--stop`, and `--cancel` perform the named lifecycle operation. `--status` prints status JSON. `--settings` launches `codex-voice-settings`. `--preview` and `--close-preview` control the isolated GTK preview. `--copy-last` copies the newest saved transcript and exits 1 when history is empty. `--version` prints the version. `settings get`, `settings reset`, and `settings set <key> <value>` print settings JSON after success.
+
+`history list <offset> <limit> [query]` prints newest-first transcript history JSON. Limits are clamped to 1–100 and query performs a case-insensitive literal substring match. `history has` exits 0 when an entry exists and 1 otherwise. `history delete <id>` removes one entry and `history clear` removes all entries.
 
 Success exits 0. Child adapters may return their own nonzero code. Invalid input and operational errors print `codex-voice: <message>` to stderr and exit 1. Commands produce no stdout unless stated above.
 
@@ -32,3 +34,9 @@ The supported environment overrides are:
 - `CODEX_VOICE_SHORTCUT_HELPER` selects the GNOME fallback-shortcut helper.
 
 Resource path overrides must name existing files. `CODEX_VOICE_GDK_BACKEND` remains a deprecated alias for `CODEX_VOICE_OVERLAY_BACKEND` for compatibility. Without overrides, the Product Package resolver checks the canonical installed layout and explicit executable-relative, source-tree, and per-user development forms in resource-specific priority order. Rust and the Electron GSettings monitor preserve `GSETTINGS_SCHEMA_DIR` and add existing canonical system and per-user schema directories.
+
+## Transcript history
+
+Every nonempty, non-placeholder transcript is saved immediately after successful ASR and before clipboard or typing automation. Cancelled and failed sessions are not saved. History is stored indefinitely in `$XDG_DATA_HOME/codex-voice/transcripts.sqlite3`, falling back to `~/.local/share/codex-voice/transcripts.sqlite3`.
+
+History JSON contains `schemaVersion: 1`, `entries`, and `hasMore`. Each entry has integer `id`, integer `createdAt` (Unix epoch milliseconds), and string `text`.
