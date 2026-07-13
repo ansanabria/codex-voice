@@ -1,5 +1,9 @@
 # Codex Voice
 
+<p align="left">
+  <img src="distribution/codex-voice.png" alt="Codex Voice" width="128" />
+</p>
+
 Push-to-talk voice dictation for Linux, powered by `codex-asr` and an existing Codex login.
 
 > **Unofficial project.** codex-voice is not affiliated with, endorsed by, or supported by OpenAI or the Codex team. There is no warranty and no support channel. Use it at your own risk.
@@ -18,7 +22,7 @@ Push-to-talk voice dictation for Linux, powered by `codex-asr` and an existing C
 | 24.04 LTS | 46          | yes     | yes |
 | 26.04 LTS | 50          | yes     | yes |
 
-Other Ubuntu releases, GNOME 47–49, Ubuntu 22.04, and derivatives are **not** supported.
+Other GNOME versions may work, but have not been tested and cannot be supported.
 
 On supported GNOME versions, the Shell extension provides the top-bar menu and global shortcut. The CLI renders the pill with Python, GTK3, and XWayland so it positions consistently on both Wayland and X11.
 
@@ -34,11 +38,8 @@ On supported GNOME versions, the Shell extension provides the top-bar menu and g
 The `.deb` is the complete installer. It bundles the CLI, `codex-asr`, the GTK pill, the GSettings schema, the GNOME extension, shortcut setup, a desktop entry, an icon, and the settings app. `apt` pulls in the required runtime packages automatically.
 
 ```bash
-sudo apt remove codex-voice-settings # required once for the old package name
 sudo apt install ./dist/codex-voice-0.1.0-x86_64.deb
 ```
-
-This is an intentional clean package-name break. The new package does not replace the old `codex-voice-settings` Debian package automatically, so remove it first. Removal without purge preserves the existing GSettings preferences.
 
 After install:
 
