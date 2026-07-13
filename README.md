@@ -10,7 +10,7 @@ Push-to-talk voice dictation for Ubuntu 24.04 and 26.04 with GNOME Shell 46 or 5
 
 ## Why I needed this
 
-I've been using agents for quite a while, and recently I've grown to like using voice-to-text to communicate my ideas to agents. I used Handy for quite some time, but I didn't quite end up liking the local voice-to-text models. OpenAI's models, on the other hand, are excellent for voice-to-text and in particular the Codex App has this feature. Since on Linux there's still no Codex App (and I think there probably won't be for quite some time), I decided to implement the voice-to-text feature using an existing ChatGPT Plus/Pro subscription, meaning we can use the same models as the Codex App.
+I've been using agents for quite a while, and recently I've grown to like using voice-to-text to communicate my ideas to agents. I used [Handy](https://handy.computer/) for quite some time, but I didn't quite end up liking the local voice-to-text models. OpenAI's models, on the other hand, are excellent for voice-to-text and in particular the Codex App has this feature. Since on Linux there's still no Codex App (and I think there probably won't be for quite some time), I decided to implement the voice-to-text feature using an existing ChatGPT Plus/Pro subscription, meaning we can use the same models as the Codex App without having to pay API prices on the voice models.
 
 ## What it does
 
@@ -26,7 +26,7 @@ I've been using agents for quite a while, and recently I've grown to like using 
 | 24.04 LTS | 46          | yes     | yes |
 | 26.04 LTS | 50          | yes     | yes |
 
-Other GNOME versions may work, but have not been tested and I can't support them. I try to support the latest stable versions because those are the ones most people use.
+Other GNOME versions may work, but have not been tested and I can't support them. I try to support the latest stable versions because those are the ones most people use. In theory, any GNOME version 46 or higher should work, but I can't guarantee it.
 
 On supported GNOME versions, the Shell extension provides the top-bar menu and global shortcut. The CLI renders the pill with Python, GTK3, and XWayland so it positions consistently on both Wayland and X11.
 
@@ -42,12 +42,13 @@ On supported GNOME versions, the Shell extension provides the top-bar menu and g
 The `.deb` is the complete installer. It bundles the CLI, `codex-asr`, the GTK pill, the GSettings schema, the GNOME extension, shortcut setup, a desktop entry, an icon, and the settings app. `apt` pulls in the required runtime packages automatically.
 
 ```bash
-sudo apt install ./dist/codex-voice-0.1.0-x86_64.deb
+curl -L -o codex-voice-0.1.0-x86_64.deb https://github.com/ansanabria/codex-voice/releases/download/v0.1.0/codex-voice-0.1.0-x86_64.deb
+sudo apt install ./codex-voice-0.1.0-x86_64.deb
 ```
 
 After install:
 
-- On the next GNOME login, the extension is enabled automatically. Log out and log back in to apply it. If the shell is unsupported, a legacy global shortcut is configured instead.
+- On the next GNOME login, the extension is enabled automatically. **Log out and log back in to apply it**. If the shell is unsupported, a legacy global shortcut is configured instead.
 
 ### Build from source
 
@@ -99,6 +100,26 @@ sudo apt remove codex-voice           # remove the application
 ./scripts/uninstall.sh                # also clean legacy per-user files
 ./scripts/uninstall.sh --purge        # also reset saved preferences
 ```
+
+## Troubleshooting
+
+### Transcription fails with an auth error
+
+Codex Voice doesn't handle authentication itself — the bundled `codex-asr` reuses your Codex CLI login, stored at `~/.codex/auth.json` (or `$CODEX_HOME/auth.json` when that variable is set). If transcription fails with an HTTP 401/403 or "unauthorized" message, that login is missing or expired.
+
+To fix it, log in with the Codex CLI on the same machine and user account that runs Codex Voice:
+
+```bash
+codex login
+```
+
+Then verify the auth file exists:
+
+```bash
+ls -l ~/.codex/auth.json
+```
+
+If you set `CODEX_HOME` to a non-default location, point it at the directory that contains `auth.json` and restart any running Codex Voice process. After a successful `codex login`, the next dictation should transcribe normally.
 
 ## Disclaimer
 
