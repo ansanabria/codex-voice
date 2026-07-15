@@ -29,6 +29,7 @@ deb:
     - libsecret-1-0
     - alsa-utils
     - wl-clipboard
+    - xclip
     - ydotool
     - python3
     - python3-gi

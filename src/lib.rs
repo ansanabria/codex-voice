@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command as ProcessCommand, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const EXTENSION_UUID: &str = "codex-voice@andy-spike.github.io";
 
@@ -343,27 +343,31 @@ mod dictation_session {
         File::open(&paths.transcript)?.read_to_string(&mut text)?;
         trim_trailing_newlines(&mut text);
         remove(&paths.transcript);
-        kill_from_file(&paths.overlay_pid, libc::SIGTERM);
-        remove(&paths.overlay_pid);
+        close_overlay_before_paste(paths);
         if text.is_empty() || text == "..." {
             return Ok(1);
         }
 
         transcript_history::add(&text)?;
-        let _ = copy_to_clipboard(&text);
+        copy_to_clipboard(&text)?;
         if let Some(ydotool) = product_package::command("ydotool") {
             runtime_state::publish(paths, runtime_state::State::Typing, owner_pid)?;
-            thread::sleep(Duration::from_millis(200));
             if !paths.cancel.exists() && !INTERRUPTED.load(Ordering::SeqCst) {
-                let mut typing = ProcessCommand::new(ydotool)
-                    .args(["type", "--key-delay", "12", "--"])
-                    .arg(&text)
+                // Shift+Insert is understood as paste by both common graphical
+                // text controls and terminal emulators on Linux.
+                let mut pasting = ProcessCommand::new(ydotool)
+                    .args(["key", "42:1", "110:1", "110:0", "42:0"])
                     .stdout(Stdio::null())
-                    .stderr(Stdio::null())
+                    .stderr(Stdio::inherit())
                     .spawn()?;
-                publish_child(&mut typing, &paths.typing_pid)?;
-                let _ = wait_for_child(&mut typing);
+                publish_child(&mut pasting, &paths.typing_pid)?;
+                let status = wait_for_child(&mut pasting)?;
                 remove(&paths.typing_pid);
+                if !status.success() {
+                    return Err(io::Error::other(format!(
+                        "clipboard paste command exited with {status}"
+                    )));
+                }
             }
         }
         println!("{text}");
@@ -525,13 +529,30 @@ fn wait_for_child(child: &mut Child) -> io::Result<ExitStatus> {
     }
 }
 fn copy_to_clipboard(text: &str) -> io::Result<()> {
-    let Some(wl_copy) = product_package::command("wl-copy") else {
-        return Err(io::Error::new(
+    let mut last_error = None;
+    if let Some(wl_copy) = product_package::command("wl-copy") {
+        match write_to_clipboard_command(ProcessCommand::new(wl_copy), text) {
+            Ok(()) => return Ok(()),
+            Err(error) => last_error = Some(error),
+        }
+    }
+    if let Some(xclip) = product_package::command("xclip") {
+        let mut command = ProcessCommand::new(xclip);
+        command.args(["-selection", "clipboard", "-in"]);
+        match write_to_clipboard_command(command, text) {
+            Ok(()) => return Ok(()),
+            Err(error) => last_error = Some(error),
+        }
+    }
+    Err(last_error.unwrap_or_else(|| {
+        io::Error::new(
             io::ErrorKind::NotFound,
-            "wl-copy was not found",
-        ));
-    };
-    let mut child = ProcessCommand::new(wl_copy)
+            "neither wl-copy nor xclip was found",
+        )
+    }))
+}
+fn write_to_clipboard_command(mut command: ProcessCommand, text: &str) -> io::Result<()> {
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -541,7 +562,9 @@ fn copy_to_clipboard(text: &str) -> io::Result<()> {
     }
     let status = child.wait()?;
     if !status.success() {
-        return Err(io::Error::other(format!("wl-copy exited with {status}")));
+        return Err(io::Error::other(format!(
+            "clipboard command exited with {status}"
+        )));
     }
     Ok(())
 }
@@ -574,6 +597,18 @@ fn kill_from_file(path: &Path, signal_number: libc::c_int) {
     if let Some(pid) = read_pid(path).filter(|pid| process_exists(*pid)) {
         signal(pid, signal_number);
     }
+}
+fn close_overlay_before_paste(paths: &Paths) {
+    if let Some(pid) = read_pid(&paths.overlay_pid).filter(|pid| process_exists(*pid)) {
+        signal(pid, libc::SIGTERM);
+        let deadline = Instant::now() + Duration::from_millis(500);
+        while process_exists(pid) && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        // GNOME restores focus only after processing the destroyed window.
+        thread::sleep(Duration::from_millis(50));
+    }
+    remove(&paths.overlay_pid);
 }
 fn remove(path: &Path) {
     let _ = fs::remove_file(path);

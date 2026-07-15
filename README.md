@@ -14,7 +14,7 @@ I've been using agents for quite a while, and recently I've grown to like using 
 
 ## What it does
 
-- **Push-to-talk dictation** — press a global keyboard shortcut, speak, and the transcription is typed into whatever window has focus.
+- **Push-to-talk dictation** — press a global keyboard shortcut, speak, and the complete transcription is pasted immediately into whatever window has focus.
 - **On-screen pill** — a small recording indicator appears while listening and disappears when done.
 - **GNOME integration** — an optional top-bar indicator with start/stop/cancel controls and a settings window.
 - **Language support** — automatic detection by default, or pick from common languages and regional variants.

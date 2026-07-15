@@ -2,7 +2,7 @@
 
 ## Dictation Session
 
-The product lifecycle that records audio, transcribes it, and types or copies the result. A session may be recording, transcribing, or typing and can be cancelled at every stage. Cleanup is idempotent and only removes state owned by that session.
+The product lifecycle that records audio, transcribes it, and pastes or copies the result. A session may be recording, transcribing, or inserting text and can be cancelled at every stage. The protocol retains the legacy `typing` state name for the insertion stage. Cleanup is idempotent and only removes state owned by that session.
 
 ## Desktop Protocol
 

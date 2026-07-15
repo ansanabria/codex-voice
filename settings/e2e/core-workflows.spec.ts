@@ -1,6 +1,6 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import { execFile, execFileSync } from "node:child_process";
-import { chmod, cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -48,12 +48,24 @@ process.on("SIGINT", done); process.on("SIGTERM", done); setInterval(() => {}, 1
   await executable(path.join(bin, "codex-asr"), `#!/usr/bin/env node
 process.stdout.write("End to end dictated text\\n");
 `);
+  await executable(path.join(bin, "wl-copy"), `#!/usr/bin/env node
+const fs = require("node:fs");
+let value = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => value += chunk);
+process.stdin.on("end", () => fs.writeFileSync(process.env.E2E_CLIPBOARD_LOG, value));
+`);
   await executable(path.join(bin, "ydotool"), `#!/usr/bin/env node
-require("node:fs").writeFileSync(process.env.E2E_TYPED_LOG, process.argv.slice(2).join(" "));
+const fs = require("node:fs");
+if (!fs.existsSync(process.env.E2E_OVERLAY_STOPPED)) {
+  console.error("paste ran before the overlay released focus");
+  process.exit(1);
+}
+fs.writeFileSync(process.env.E2E_PASTE_LOG, process.argv.slice(2).join(" "));
 `);
   const overlay = path.join(runRoot, "overlay.py");
   await executable(overlay, `#!/usr/bin/env python3
-import signal, time
+import os, signal, time
 running = True
 def stop(*_):
     global running
@@ -62,6 +74,7 @@ signal.signal(signal.SIGINT, stop)
 signal.signal(signal.SIGTERM, stop)
 signal.signal(signal.SIGUSR1, lambda *_: None)
 while running: time.sleep(0.05)
+open(os.environ['E2E_OVERLAY_STOPPED'], 'w').close()
 `);
 
   environment = {
@@ -74,7 +87,9 @@ while running: time.sleep(0.05)
     XDG_RUNTIME_DIR: runtime,
     CODEX_VOICE_BIN: cli,
     CODEX_VOICE_OVERLAY: overlay,
-    E2E_TYPED_LOG: path.join(runRoot, "typed.txt")
+    E2E_CLIPBOARD_LOG: path.join(runRoot, "clipboard.txt"),
+    E2E_OVERLAY_STOPPED: path.join(runRoot, "overlay-stopped"),
+    E2E_PASTE_LOG: path.join(runRoot, "paste.txt")
   };
 
   app = await electron.launch({
@@ -124,7 +139,7 @@ test("settings persist, synchronize, validate shortcuts, and reset", async () =>
   await expect.poll(settings).toMatchObject({ enabled: true, showTrayIcon: true, keybinding: "<Control><Super>space", language: "auto" });
 });
 
-test("dictation honors enabled state and completes recording, transcription, typing, and history", async () => {
+test("dictation honors enabled state and completes recording, transcription, immediate paste, and history", async () => {
   await runCli("settings", "set", "enabled", "false");
   await expect(runCli("--start")).rejects.toThrow(/dictation is paused/);
   await runCli("settings", "set", "enabled", "true");
@@ -132,6 +147,8 @@ test("dictation honors enabled state and completes recording, transcription, typ
   await expect.poll(async () => JSON.parse((await runCli("--status")).stdout).state).toBe("recording");
   const stopped = await runCli("--stop");
   expect(stopped.stdout.trim()).toBe("End to end dictated text");
+  await expect.poll(() => readFile(environment.E2E_CLIPBOARD_LOG!, "utf8")).toBe("End to end dictated text");
+  await expect.poll(() => readFile(environment.E2E_PASTE_LOG!, "utf8")).toBe("key 42:1 110:1 110:0 42:0");
   await expect.poll(async () => JSON.parse((await runCli("--status")).stdout).state).toBe("idle");
 
   await page.getByRole("tab", { name: "Transcriptions" }).click();
