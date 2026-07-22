@@ -88,19 +88,20 @@ fn gsettings(args: &[&str]) -> io::Result<String> {
 }
 
 pub(crate) fn load() -> io::Result<Settings> {
-    let enabled = gsettings(&["get", SCHEMA, "enabled"])
-        .map(|v| v == "true")
-        .unwrap_or(true);
-    let show_tray_icon = gsettings(&["get", SCHEMA, "show-tray-icon"])
-        .map(|v| v == "true")
-        .unwrap_or(true);
-    let keybinding = gsettings(&["get", SCHEMA, "keybinding"])
-        .ok()
-        .and_then(|v| parse_gvariant_string_array(&v).into_iter().next())
+    load_with(gsettings)
+}
+
+fn load_with(mut get: impl FnMut(&[&str]) -> io::Result<String>) -> io::Result<Settings> {
+    let gsettings = &mut get;
+    let enabled = parse_gvariant_bool(&gsettings(&["get", SCHEMA, "enabled"])?)
+        .ok_or_else(|| io::Error::other("GSettings returned an invalid enabled value"))?;
+    let show_tray_icon = parse_gvariant_bool(&gsettings(&["get", SCHEMA, "show-tray-icon"])?)
+        .ok_or_else(|| io::Error::other("GSettings returned an invalid show-tray-icon value"))?;
+    let keybinding = parse_gvariant_string_array(&gsettings(&["get", SCHEMA, "keybinding"])?)
+        .into_iter()
+        .next()
         .unwrap_or_else(|| DEFAULT_KEYBINDING.into());
-    let language = gsettings(&["get", SCHEMA, "language"])
-        .ok()
-        .and_then(|v| parse_gvariant_string(&v))
+    let language = parse_gvariant_string(&gsettings(&["get", SCHEMA, "language"])?)
         .and_then(|v| normalize_language(&v))
         .unwrap_or_else(|| "auto".into());
     let language_override = env::var("CODEX_VOICE_LANG")
@@ -115,6 +116,14 @@ pub(crate) fn load() -> io::Result<Settings> {
     })
 }
 
+fn parse_gvariant_bool(value: &str) -> Option<bool> {
+    match value.trim() {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
+}
+
 pub(crate) fn set(key: &str, value: &str) -> io::Result<()> {
     match key {
         "enabled" | "show-tray-icon" => {
@@ -122,18 +131,12 @@ pub(crate) fn set(key: &str, value: &str) -> io::Result<()> {
                 return Err(invalid_input("boolean setting must be true or false"));
             }
             gsettings(&["set", SCHEMA, key, value])?;
-            if key == "enabled" {
-                sync_fallback_shortcut(value == "true")?;
-            }
         }
         "keybinding" => {
             let accelerator = normalize_accelerator(value)
                 .ok_or_else(|| invalid_input("invalid GNOME accelerator"))?;
             let escaped = accelerator.replace('\\', "\\\\").replace('\'', "\\'");
             gsettings(&["set", SCHEMA, key, &format!("['{escaped}']")])?;
-            if load()?.enabled {
-                sync_fallback_shortcut(true)?;
-            }
         }
         "language" => {
             let language = normalize_language(value)
@@ -146,27 +149,7 @@ pub(crate) fn set(key: &str, value: &str) -> io::Result<()> {
 }
 
 pub(crate) fn reset() -> io::Result<()> {
-    gsettings(&["reset-recursively", SCHEMA])?;
-    sync_fallback_shortcut(true)
-}
-
-fn sync_fallback_shortcut(enabled: bool) -> io::Result<()> {
-    let Some(helper) = product_package::shortcut_helper() else {
-        return Ok(());
-    };
-    let action = if enabled && !extension_is_active().unwrap_or(false) {
-        "install"
-    } else {
-        "remove"
-    };
-    let status = Command::new("python3").arg(helper).arg(action).status()?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(io::Error::other(format!(
-            "could not {action} the fallback global shortcut"
-        )))
-    }
+    gsettings(&["reset-recursively", SCHEMA]).map(|_| ())
 }
 
 pub(crate) fn extension_is_active() -> io::Result<bool> {
@@ -265,6 +248,19 @@ mod tests {
         assert_eq!(normalize_language(""), Some("auto".into()));
         assert_eq!(normalize_language("EN-US"), Some("en-us".into()));
         assert_eq!(normalize_language("en_US"), None);
+    }
+
+    #[test]
+    fn parses_gsettings_boole_strictly() {
+        assert_eq!(parse_gvariant_bool("true"), Some(true));
+        assert_eq!(parse_gvariant_bool("false"), Some(false));
+        assert_eq!(parse_gvariant_bool("not-a-bool"), None);
+    }
+
+    #[test]
+    fn propagates_gsettings_read_failures() {
+        let error = load_with(|_| Err(io::Error::other("read failed"))).unwrap_err();
+        assert_eq!(error.to_string(), "read failed");
     }
 
     #[test]

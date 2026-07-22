@@ -10,7 +10,7 @@ The versioned local contract shared by the Rust application and desktop adapters
 
 ## Desktop Adapter
 
-A separately implemented interface to the desktop. The CLI, GTK overlay, GNOME Shell extension, and Electron settings executable are adapters; none owns dictation behavior.
+A separately implemented interface to the desktop. The CLI, GTK overlay, GNOME Shell extension, and GTK/libadwaita settings executable are adapters; none owns dictation behavior.
 
 ## Settings
 
@@ -22,4 +22,4 @@ Ephemeral, atomically replaced state describing an active Dictation Session. It 
 
 ## Product Package
 
-The single Debian package named `codex-voice`. It contains the Rust CLI/application, `codex-asr`, GTK overlay, schema, GNOME extension, shortcut helper, desktop integration files, and the `codex-voice-settings` Electron executable.
+The single Debian package named `codex-voice`. It contains the Rust CLI/application, `codex-asr`, GTK overlay, GTK 4/libadwaita settings adapter, schema, GNOME extension, shortcut helper, and desktop integration files.

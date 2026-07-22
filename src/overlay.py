@@ -13,6 +13,15 @@ import struct
 import subprocess
 import time
 
+# Cover the import/GTK-construction window before GLib owns this signal.
+_EARLY_TRANSCRIBE = False
+if __name__ == '__main__':
+    def remember_transcribing(_signal, _frame):
+        global _EARLY_TRANSCRIBE
+        _EARLY_TRANSCRIBE = True
+
+    signal.signal(signal.SIGUSR1, remember_transcribing)
+
 import gi
 
 gi.require_version('Gtk', '3.0')
@@ -108,7 +117,8 @@ class Waveform(Gtk.DrawingArea):
 class Overlay(Gtk.Window):
     """Bottom-center recording overlay with recording/transcribing states."""
 
-    def __init__(self, audio_file=None, control_command=None, preview=False):
+    def __init__(self, audio_file=None, control_command=None, preview=False,
+                 recorder_pid=None, recorder_start_time=None):
         # The launcher uses XWayland because native Wayland clients cannot place
         # toplevels in global coordinates. The pill accepts focus while active so
         # Escape can cancel without relying on the Shell extension.
@@ -116,6 +126,8 @@ class Overlay(Gtk.Window):
         self.audio_file = audio_file
         self.control_command = control_command
         self.preview = preview
+        self.recorder_pid = recorder_pid
+        self.recorder_start_time = recorder_start_time
         self.state = 'recording'
         self._level_history = [0.0] * ((NUM_BARS // 2) + 1)
         self._smoothed_level = 0.0
@@ -182,6 +194,7 @@ class Overlay(Gtk.Window):
             screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
         self._build_ui()
+        self.get_accessible().set_name('Codex Voice recording')
         self.connect('map-event', self._on_map)
         self.connect('key-press-event', self._on_key_press)
         self.connect('destroy', self._on_destroy)
@@ -190,12 +203,6 @@ class Overlay(Gtk.Window):
         self.present()
         self._position_window()
 
-        GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1,
-                            self._on_transcribing_signal)
-        GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM,
-                            self._on_quit_signal)
-        GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT,
-                            self._on_quit_signal)
         GLib.timeout_add(LEVEL_POLL_MS, self._poll_levels)
 
     def _build_ui(self):
@@ -219,13 +226,16 @@ class Overlay(Gtk.Window):
 
         cancel = Gtk.Button(label='\u00d7')
         cancel.set_tooltip_text('Close preview' if self.preview else 'Cancel dictation')
-        cancel.set_can_focus(False)
-        cancel.set_focus_on_click(False)
+        cancel.set_can_focus(True)
+        cancel.set_focus_on_click(True)
         cancel.set_halign(Gtk.Align.END)
         cancel.set_valign(Gtk.Align.CENTER)
         cancel.get_style_context().add_class('cancel-btn')
         cancel.set_relief(Gtk.ReliefStyle.NONE)
         cancel.connect('clicked', self._cancel)
+        cancel.get_accessible().set_name(
+            'Close preview' if self.preview else 'Cancel dictation')
+        self.cancel_button = cancel
         recording.pack_end(cancel, False, False, 0)
 
         # A normal row lets the remaining 13px become breathing room between
@@ -332,6 +342,7 @@ class Overlay(Gtk.Window):
         if self.state != 'recording':
             return GLib.SOURCE_CONTINUE
         self.state = 'transcribing'
+        self.get_accessible().set_name('Codex Voice transcribing')
         GLib.idle_add(self._switch_to_transcribing)
         return GLib.SOURCE_CONTINUE
 
@@ -348,25 +359,52 @@ class Overlay(Gtk.Window):
     def _cancel(self, _button=None):
         if self.state == 'cancelled':
             return
+        previous_state = self.state
         self.state = 'cancelled'
-        action = '--close-preview' if self.preview else '--cancel'
+        self.cancel_button.set_sensitive(False)
+        action = ([self.control_command, '--close-preview'] if self.preview else
+                  [self.control_command, '--cancel-recording',
+                   str(self.recorder_pid), str(self.recorder_start_time)])
         try:
-            subprocess.Popen(
-                [self.control_command, action],
+            process = subprocess.Popen(
+                action,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 close_fds=True)
         except OSError:
-            # Keep the control visible so the user can retry. The adapter must
-            # not implement session cleanup when the Rust command is unavailable.
-            self.state = 'recording'
+            self.state = previous_state
+            self.cancel_button.set_sensitive(True)
+            return
+
+        def control_finished(_pid, status):
+            self.control_process = None
+            if os.waitstatus_to_exitcode(status) == 0:
+                self.destroy()
+                return
+            self.state = previous_state
+            self.cancel_button.set_sensitive(True)
+
+        self.control_process = process
+        GLib.child_watch_add(process.pid, control_finished)
 
     def _on_quit_signal(self):
         self.destroy()
         return GLib.SOURCE_REMOVE
 
     def _on_destroy(self, _widget):
+        if not self.preview and self.state == 'recording':
+            self.state = 'cancelled'
+            try:
+                subprocess.Popen(
+                    [self.control_command, '--cancel-recording',
+                     str(self.recorder_pid), str(self.recorder_start_time)],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    close_fds=True)
+            except OSError:
+                pass
         Gtk.main_quit()
 
 
@@ -375,10 +413,33 @@ def parse_args():
     parser.add_argument('--audio-file')
     parser.add_argument('--control-command', required=True)
     parser.add_argument('--preview', action='store_true')
-    return parser.parse_args()
+    parser.add_argument('--recorder-pid', type=int)
+    parser.add_argument('--recorder-start-time', type=int)
+    args = parser.parse_args()
+    if not args.preview and (args.recorder_pid is None or
+                             args.recorder_start_time is None):
+        parser.error('recording overlays require recorder identity')
+    return args
 
 
 if __name__ == '__main__':
     args = parse_args()
-    Overlay(args.audio_file, args.control_command, args.preview)
+    overlay = [None]
+
+    def transcribing_signal():
+        return overlay[0]._on_transcribing_signal() if overlay[0] else GLib.SOURCE_CONTINUE
+
+    def quit_signal():
+        return overlay[0]._on_quit_signal() if overlay[0] else GLib.SOURCE_CONTINUE
+
+    # Register before GTK construction so an immediate stop cannot terminate
+    # the process through SIGUSR1's default action.
+    GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, transcribing_signal)
+    GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, quit_signal)
+    GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, quit_signal)
+    overlay[0] = Overlay(
+        args.audio_file, args.control_command, args.preview,
+        args.recorder_pid, args.recorder_start_time)
+    if _EARLY_TRANSCRIBE:
+        overlay[0]._on_transcribing_signal()
     Gtk.main()

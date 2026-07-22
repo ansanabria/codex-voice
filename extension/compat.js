@@ -6,7 +6,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 export function addKeybinding(name, settings, handler) {
     return Main.wm.addKeybinding(name, settings,
         Meta.KeyBindingFlags.NONE,
-        Shell.ActionMode.ALL,
+        Shell.ActionMode.NORMAL,
         handler);
 }
 

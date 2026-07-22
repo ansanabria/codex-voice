@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Codex Voice session setup
+Comment=Enable Codex Voice controls for this desktop session
+TryExec=/usr/lib/codex-voice/codex-voice-session-setup.sh
+Exec=/usr/lib/codex-voice/codex-voice-session-setup.sh
+OnlyShowIn=GNOME;
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

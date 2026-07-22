@@ -10,11 +10,26 @@ Version 1 is the local contract between the Rust application and Desktop Adapter
 
 Success exits 0. Child adapters may return their own nonzero code. Invalid input and operational errors print `codex-voice: <message>` to stderr and exit 1. Commands produce no stdout unless stated above.
 
+The executable also uses identity-scoped private controls internally: `--cancel-recording <recorderPid> <recorderStartTime>`, `--watch-session <overlayPid> <overlayStartTime> <recorderPid> <recorderStartTime>`, and `--supervise-owner <ownerPid> <ownerStartTime>`. Desktop Adapters do not invoke these as general lifecycle operations. The overlay uses the recorder-scoped cancellation control; detached watcher and supervisor processes use the other controls to clean up only the session whose full process identities still match.
+
 ## Runtime state
 
-The file is `$XDG_RUNTIME_DIR/codex-voice-state.json`, falling back to `/tmp/codex-voice-state.json`. Writers create a sibling temporary file and atomically rename it. Active documents contain `schemaVersion: 1`, a `state` of `recording`, `transcribing`, or `typing`, positive integer `ownerPid`, and integer `startedAt` (Unix epoch milliseconds). `typing` is the legacy protocol name for the text-insertion stage, which pastes the completed transcript in one operation. The file is absent while idle and is removed during idempotent cleanup. Missing, malformed, unknown-state, or unsupported-version documents are displayed as idle/unknown and must never select a destructive action.
+The runtime directory is `$XDG_RUNTIME_DIR` when set. Otherwise it is the private directory `$XDG_CACHE_HOME/codex-voice/runtime`, with `~/.cache/codex-voice/runtime` used when `XDG_CACHE_HOME` is also unset. The fallback directory is created with mode `0700`; runtime state does not fall back to `/tmp`.
 
-Other runtime files retain their existing names: `codex-voice.pid`, `.wav`, `-overlay.pid`, `-preview-overlay.pid`, `-transcriber.pid`, `-transcript.txt`, `-cancelled`, `-typing.pid`, and `-session-owner.pid` in the same runtime directory.
+`codex-voice-state.json` is written through a sibling temporary file and atomic rename. An active document requires `schemaVersion: 1`, a `state` of `recording`, `transcribing`, or `typing`, positive integers `ownerPid` and `ownerStartTime`, and a nonnegative integer `startedAt` containing Unix epoch milliseconds. The PID and Linux `/proc/<pid>/stat` start time together identify the owning process; readers must reject a document when either part is missing, invalid, dead, or no longer matches. `typing` is the legacy protocol name for the text-insertion stage, which pastes the completed transcript in one operation. The file is normally absent while idle and is removed by successful identity-scoped cleanup. Missing, malformed, stale, unknown-state, or unsupported-version documents are non-active and must never select a destructive action.
+
+Process identity records are JSON objects containing positive integer `pid` and `startTime` fields. Despite their `.pid` suffixes, they are not PID-only text files. The runtime directory uses these identity-record filenames:
+
+- `codex-voice.pid`: active audio recorder identity.
+- `codex-voice-overlay.pid`: active dictation overlay identity.
+- `codex-voice-preview-overlay.pid`: isolated Settings preview overlay identity.
+- `codex-voice-transcriber.pid`: active `codex-asr` identity.
+- `codex-voice-typing.pid`: active paste process identity.
+- `codex-voice-session-owner.pid`: process identity owning the transcribing/typing phase.
+- `codex-voice-session-recorder.pid`: originating recorder identity for the owned session, used to scope delayed overlay cancellation.
+- `codex-voice-cancelled`: the recorder or session-owner identity whose work was cancelled.
+
+The detached owner supervisor is identified by its private command arguments rather than by another runtime record. It waits for the exact owner identity and performs cleanup only while `codex-voice-session-owner.pid` still contains that identity, so a stale supervisor cannot clean up a newer session. Stable non-identity filenames include `codex-voice.lock`, `codex-voice.wav`, `codex-voice-transcript.txt`, and `codex-voice-state.json`.
 
 ## Status JSON
 
@@ -27,13 +42,12 @@ Settings JSON contains `schemaVersion: 1`, booleans `enabled` and `showTrayIcon`
 The supported environment overrides are:
 
 - `CODEX_VOICE_LANG` selects the effective transcription language.
-- `CODEX_VOICE_BIN` selects the CLI invoked by the Electron adapter.
+- `CODEX_VOICE_BIN` selects the CLI invoked by the native GTK settings adapter.
 - `CODEX_VOICE_SETTINGS_BIN` selects the Settings executable launched by Rust.
 - `CODEX_VOICE_OVERLAY` selects the GTK overlay script.
 - `CODEX_VOICE_OVERLAY_BACKEND` selects its GDK backend.
-- `CODEX_VOICE_SHORTCUT_HELPER` selects the GNOME fallback-shortcut helper.
 
-Resource path overrides must name existing files. `CODEX_VOICE_GDK_BACKEND` remains a deprecated alias for `CODEX_VOICE_OVERLAY_BACKEND` for compatibility. Without overrides, the Product Package resolver checks the canonical installed layout and explicit executable-relative, source-tree, and per-user development forms in resource-specific priority order. Rust and the Electron GSettings monitor preserve `GSETTINGS_SCHEMA_DIR` and add existing canonical system and per-user schema directories.
+Resource path overrides must name existing files. `CODEX_VOICE_GDK_BACKEND` remains a deprecated alias for `CODEX_VOICE_OVERLAY_BACKEND` for compatibility. Without overrides, the Product Package resolver checks the canonical installed layout and explicit executable-relative, source-tree, and per-user development forms in resource-specific priority order. Rust and the GTK settings monitor preserve `GSETTINGS_SCHEMA_DIR` and add existing canonical system and per-user schema directories.
 
 ## Transcript history
 

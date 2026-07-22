@@ -12,9 +12,7 @@ __pycache__/
 *.sqlite-wal
 /target/
 /packaging/resources/codex-asr
-node_modules/
 dist/
-dist-electron/
 dogfood-output/
 /tmp/
 .impeccable/config.local.json

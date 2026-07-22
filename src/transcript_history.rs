@@ -24,6 +24,20 @@ struct HistoryDocument {
     has_more: bool,
 }
 
+pub(crate) struct InsertedTranscript {
+    database: PathBuf,
+    id: i64,
+}
+
+impl InsertedTranscript {
+    pub(crate) fn rollback(&self) -> io::Result<()> {
+        open_at(&self.database)?
+            .execute("DELETE FROM transcripts WHERE id = ?1", [self.id])
+            .map_err(sqlite_error)?;
+        Ok(())
+    }
+}
+
 fn database_path() -> io::Result<PathBuf> {
     let base = env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
@@ -71,18 +85,51 @@ fn open() -> io::Result<Connection> {
     open_at(&path)
 }
 
-pub(crate) fn add(text: &str) -> io::Result<()> {
+pub(crate) fn add(text: &str) -> io::Result<InsertedTranscript> {
+    let database = database_path()?;
+    insert(open()?, database, text)
+}
+
+#[cfg(test)]
+fn insert_at(database: PathBuf, text: &str) -> io::Result<InsertedTranscript> {
+    let connection = open_at(&database)?;
+    insert(connection, database, text)
+}
+
+fn insert(connection: Connection, database: PathBuf, text: &str) -> io::Result<InsertedTranscript> {
     let created_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(io::Error::other)?
         .as_millis() as i64;
-    open()?
+    connection
         .execute(
             "INSERT INTO transcripts (created_at, text) VALUES (?1, ?2)",
             params![created_at, text],
         )
         .map_err(sqlite_error)?;
-    Ok(())
+    Ok(InsertedTranscript {
+        database,
+        id: connection.last_insert_rowid(),
+    })
+}
+
+#[cfg(test)]
+pub(crate) fn insert_at_for_test(path: &Path, text: &str) -> io::Result<InsertedTranscript> {
+    insert_at(path.to_owned(), text)
+}
+
+#[cfg(test)]
+pub(crate) fn texts_at_for_test(path: &Path) -> io::Result<Vec<String>> {
+    let connection = open_at(path)?;
+    let mut statement = connection
+        .prepare("SELECT text FROM transcripts ORDER BY id")
+        .map_err(sqlite_error)?;
+    let texts = statement
+        .query_map([], |row| row.get(0))
+        .map_err(sqlite_error)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(sqlite_error)?;
+    Ok(texts)
 }
 
 pub(crate) fn last() -> io::Result<Option<TranscriptEntry>> {

@@ -9,9 +9,9 @@ Codex Voice has one dictation lifecycle but several desktop entry points. Duplic
 
 ## Decision
 
-Ship one default Product Package, `codex-voice`, while retaining separately implemented CLI, GTK, GNOME Shell, and Electron Desktop Adapters. Rust is authoritative for Dictation Session and Settings behavior. The Desktop Protocol is the CLI plus versioned local JSON and GSettings contracts documented in `docs/desktop-protocol-v1.md`.
+Ship one default Product Package, `codex-voice`, while retaining separately implemented CLI, GTK overlay, GNOME Shell, and GTK/libadwaita settings adapters. Rust is authoritative for Dictation Session and Settings behavior. The settings adapter invokes Rust through the versioned Desktop Protocol: CLI commands plus local JSON and GSettings contracts documented in `docs/desktop-protocol-v1.md`.
 
-The Debian rename from `codex-voice-settings` is an intentional clean break. The new package does not declare `Provides`, `Replaces`, or an automatic package migration. Users remove the old package before installing the new one; saved GSettings remain compatible unless purged.
+The package upgrades the former Electron settings payload in place. Its `preinst` removes only the legacy `/opt` launcher, AppArmor profile, alternative, and generated desktop entry; saved GSettings remain compatible unless purged.
 
 ## Consequences
 

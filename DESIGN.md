@@ -131,33 +131,21 @@ Light mode inverts the neutral ramp: surface becomes Off White (`#FAFAFA`), rais
 
 Flat by default. Depth is conveyed by tonal layering — the surface (`#0F0F0F`) and raised surface (`#1A1A1A`) create a 12% lightness step that defines cards and controls without any shadow. Borders (`#2A2A2A`) reinforce edges where tonal contrast alone is insufficient.
 
-The only shadow-like effect in the system is the accent glow on the shortcut-capture button: `box-shadow: 0 0 0 4px color-mix(in srgb, #10A37F, transparent 70%)`. This is a state effect (the button is actively listening for input), not an elevation tool. It never appears on resting elements.
-
-The modal overlay uses a backdrop dim (`rgba(0, 0, 0, 0.45)`) to separate itself from the content beneath — tonal layering at the page level, not a shadow on the dialog.
+The settings window uses libadwaita’s tonal surfaces and native alert dialogs. Native focus indicators and the system color scheme take precedence over browser-specific effects; the recording-pill overlay remains the only fixed custom surface.
 
 ### Named Rules
 **The Flat-By-Default Rule.** No element casts a shadow at rest. Depth is tonal: surface, raised surface, and border. Shadows are reserved for state (the capture glow) and are always accent-colored, never gray.
 
 ## 5. Components
 
-### Buttons
-- **Shape:** Gently curved edges (8px radius)
-- **Primary:** Raised surface background (`#1A1A1A`), text color (`#FAFAFA`), 1px Hairline border, 8px 12px padding. Same style for all default buttons — there is no "primary fill" button in this system.
-- **Danger:** Same shape and background, but border and text in Coral Alert (`#FF6B6B`). Never filled with red — the danger is signaled by color, not by a saturated background.
-- **Hover / Focus:** Inherit browser default focus ring. No custom hover background change — the border and cursor are sufficient.
-- **Shortcut Capture:** When actively capturing, pulses with an accent-colored box-shadow glow (4px ring, 70% transparent). This is the only animated button state.
+### Native controls
+- **Shape and focus:** Use libadwaita controls and their system focus behavior. Do not override their hover, radius, typography, or browser-like button styling.
+- **Destructive actions:** Use libadwaita’s destructive action appearance rather than custom red borders or fills.
+- **Shortcut capture:** The active capture button may use the ChatGPT Green accent. Preserve native keyboard focus and feedback.
 
-### Cards / Settings Sections
-- **Corner Style:** Rounded containers (12px radius)
-- **Background:** Raised surface (`#1A1A1A`)
-- **Shadow Strategy:** None. Flat — see Elevation.
-- **Border:** 1px Hairline (`#2A2A2A`)
-- **Internal Padding:** 16px
-- **Structure:** One `<h2>` section title, then content. No nested cards. No card-within-card. Ever.
-
-### Inputs / Fields
-- **Style:** 1px Hairline border, surface background (`#0F0F0F` — one step below the card), 8px radius, 8px 10px padding
-- **Focus:** Inherit browser default focus ring. No custom glow.
+### Settings sections
+- **Structure:** Use `Adw.PreferencesPage`, preference groups, rows, and native dialogs. Do not recreate cards, borders, inputs, or CSS focus treatment.
+- **Typography and scale:** Inherit the system font and scale from GTK/libadwaita.
 
 ### Pills (Signature Component)
 The overlay pill is the product's defining visual element. It appears during recording and transcription, then vanishes.
@@ -167,12 +155,8 @@ The overlay pill is the product's defining visual element. It appears during rec
 - **Content:** A slightly left-biased nine-bar off-white live waveform and a compact off-white × control, inset 8px from the trailing edge; it matches the settings preview exactly.
 - **Transcribing State:** Waveform is replaced by a compact off-white loading spinner; the × control remains visible and active
 
-### Modal
-- **Backdrop:** `position: fixed`, `inset: 0`, `rgba(0, 0, 0, 0.45)` dim, `place-items: center`
-- **Content:** A settings card (12px radius, raised surface) at `max-width: 24rem`
-
-### Navigation
-The settings app uses exactly two top-level tabs: General and Transcriptions. Tabs use a quiet full-width line treatment and accessible keyboard navigation. No sidebar, breadcrumbs, nested tabs, or deeper navigation.
+### Native dialogs and navigation
+Use libadwaita alert dialogs for destructive confirmation. The settings window exposes exactly two views, General and Transcriptions, through the native view switcher. Do not add tabs, sidebars, breadcrumbs, nested navigation, or deeper views.
 
 ## 6. Do's and Don'ts
 

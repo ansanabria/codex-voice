@@ -1,0 +1,12 @@
+[Unit]
+Description=Ydotool daemon for Codex Voice
+ConditionPathExists=/usr/bin/ydotoold
+ConditionPathExists=!/usr/lib/systemd/user/ydotool.service
+
+[Service]
+ExecStart=/usr/bin/ydotoold
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

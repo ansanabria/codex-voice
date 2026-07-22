@@ -39,33 +39,34 @@ On supported GNOME versions, the Shell extension provides the top-bar menu and g
 
 ### From a .deb
 
-The `.deb` is the complete installer. It bundles the CLI, `codex-asr`, the GTK pill, the GSettings schema, the GNOME extension, shortcut setup, a desktop entry, an icon, and the settings app. `apt` pulls in the required runtime packages automatically.
+The `.deb` is the complete installer. It bundles the CLI, `codex-asr`, the GTK pill, the GSettings schema, the GNOME extension, session setup, a desktop entry, an icon, and the settings app. `apt` pulls in the required runtime packages automatically.
 
 Download the `deb` package:
 
 ```bash
-curl -L -o codex-voice-0.1.0-x86_64.deb https://github.com/ansanabria/codex-voice/releases/download/v0.1.0/codex-voice-0.1.0-x86_64.deb
+curl -L -o codex-voice-0.2.0-x86_64.deb https://github.com/ansanabria/codex-voice/releases/download/v0.2.0/codex-voice-0.2.0-x86_64.deb
 ```
 
 Install the package:
 
 ```bash
-sudo apt install ./codex-voice-0.1.0-x86_64.deb
+sudo apt install ./codex-voice-0.2.0-x86_64.deb
 ```
 
 After install:
 
-- On the next GNOME login, the extension is enabled automatically. **Log out and log back in to apply it**. If the shell is unsupported, a legacy global shortcut is configured instead.
+- **Log out and log back in once.** The next GNOME login enables the extension, grants the active local session access to `/dev/uinput`, and starts the per-user `ydotoold` paste service.
+- Codex Voice deliberately does not add your account to the `input` group. Its packaged udev rule grants only the active local desktop session access to the synthetic-input device; it does not grant persistent access to physical keyboard and pointer devices under `/dev/input`.
 
 ### Build from source
 
 ```bash
 cargo test
-npm --prefix settings install
+python3 -m unittest settings/test_codex_voice_settings.py
 ./build.sh
 ```
 
-This produces the complete product `.deb` in `dist/`. The settings workspace's `npm run build` command builds only the Electron adapter; product orchestration belongs to the root `build.sh`.
+This produces the complete product `.deb` in `dist/`. The settings adapter is Python with GTK 4/libadwaita; it invokes fixed Rust CLI argument arrays and never writes GSettings directly.
 
 ## Usage
 
@@ -94,11 +95,11 @@ Language defaults to `auto`, which omits `--language` when calling `codex-asr` a
 ## Development
 
 ```bash
-cargo test                    # Rust CLI tests
-cd settings && npm install && npm test   # settings app tests
+cargo test                                      # Rust CLI tests
+python3 -m unittest settings/test_codex_voice_settings.py
 ```
 
-The Electron renderer is React + TypeScript + Vite + Tailwind CSS v4. Its preload bridge exposes only typed settings operations, and the main process invokes the Rust CLI with fixed argument arrays rather than a shell.
+The settings adapter uses native GTK 4/libadwaita widgets. Rust remains authoritative for settings validation, shortcut synchronisation, history, and preview lifecycle.
 
 ## Uninstall
 
@@ -109,6 +110,26 @@ sudo apt remove codex-voice           # remove the application
 ```
 
 ## Troubleshooting
+
+### Transcription is copied but not pasted
+
+Codex Voice saves every successful transcript to History and copies it to the clipboard before checking paste automation. If `ydotoold` is unavailable, no paste keys are sent and the GNOME notification names the failing socket and a repair command.
+
+After installation, first log out and back in. On Ubuntu 24.04 the package runs `codex-voice-ydotoold.service`; on Ubuntu 26.04 it uses Debian's `ydotool.service`. Check the applicable service with:
+
+```bash
+systemctl --user status codex-voice-ydotoold.service  # Ubuntu 24.04
+systemctl --user status ydotool.service               # Ubuntu 26.04
+```
+
+If the service reports `/dev/uinput` permission errors after a full login restart, reapply the packaged active-session rule and restart the service:
+
+```bash
+sudo udevadm control --reload-rules
+sudo udevadm trigger --action=change --name-match=/dev/uinput
+systemctl --user restart codex-voice-ydotoold.service  # Ubuntu 24.04
+# or: systemctl --user restart ydotool.service         # Ubuntu 26.04
+```
 
 ### Transcription fails with an auth error
 

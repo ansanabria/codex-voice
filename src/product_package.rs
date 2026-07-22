@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use std::process::Command;
 
 const SYSTEM_SHARE: &str = "/usr/share/codex-voice";
-const SYSTEM_LIB: &str = "/usr/lib/codex-voice";
 
 struct Layout {
     source_root: Option<PathBuf>,
@@ -40,17 +39,6 @@ impl Layout {
             candidates.push(share.join("overlay.py"));
         }
         candidates.push(PathBuf::from(SYSTEM_SHARE).join("overlay.py"));
-        candidates
-    }
-
-    fn shortcut_candidates(&self) -> Vec<PathBuf> {
-        let mut candidates = vec![PathBuf::from(SYSTEM_LIB).join("gnome-custom-shortcuts.py")];
-        if let Some(root) = &self.source_root {
-            candidates.push(root.join("scripts/gnome-custom-shortcuts.py"));
-        }
-        if let Some(share) = &self.user_share {
-            candidates.push(share.join("gnome-custom-shortcuts.py"));
-        }
         candidates
     }
 
@@ -99,15 +87,6 @@ pub(crate) fn overlay_script() -> Option<PathBuf> {
     override_file("CODEX_VOICE_OVERLAY").or_else(|| {
         Layout::from_environment()
             .overlay_candidates()
-            .into_iter()
-            .find(|path| path.is_file())
-    })
-}
-
-pub(crate) fn shortcut_helper() -> Option<PathBuf> {
-    override_file("CODEX_VOICE_SHORTCUT_HELPER").or_else(|| {
-        Layout::from_environment()
-            .shortcut_candidates()
             .into_iter()
             .find(|path| path.is_file())
     })
@@ -192,15 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn related_resources_derive_from_the_same_layout() {
-        assert_eq!(
-            layout().shortcut_candidates(),
-            vec![
-                PathBuf::from("/usr/lib/codex-voice/gnome-custom-shortcuts.py"),
-                PathBuf::from("/work/codex-voice/scripts/gnome-custom-shortcuts.py"),
-                PathBuf::from("/home/user/.local/share/codex-voice/gnome-custom-shortcuts.py"),
-            ]
-        );
+    fn schema_resources_cover_user_and_system_layouts() {
         assert_eq!(
             layout().schema_directories(),
             vec![

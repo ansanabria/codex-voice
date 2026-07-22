@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-exec /usr/bin/codex-voice-settings "$@"
+exec python3 /usr/lib/codex-voice/codex_voice_settings.py "$@"

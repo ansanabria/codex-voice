@@ -10,12 +10,50 @@ fn parse_args(args: &[String]) -> io::Result<Command> {
         [flag] if flag == "--start" => Ok(Command::Start),
         [flag] if flag == "--stop" => Ok(Command::Stop),
         [flag] if flag == "--cancel" => Ok(Command::Cancel),
+        [flag, recorder_pid, recorder_start_time] if flag == "--cancel-recording" => {
+            Ok(Command::CancelRecording {
+                recorder_pid: recorder_pid.parse().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "invalid recorder PID")
+                })?,
+                recorder_start_time: recorder_start_time.parse().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "invalid recorder start time")
+                })?,
+            })
+        }
         [flag] if flag == "--status" => Ok(Command::Status),
         [flag] if flag == "--settings" => Ok(Command::LaunchSettings),
         [flag] if flag == "--preview" => Ok(Command::Preview),
         [flag] if flag == "--close-preview" => Ok(Command::ClosePreview),
         [flag] if flag == "--version" => Ok(Command::Version),
         [flag] if flag == "--copy-last" => Ok(Command::CopyLastTranscript),
+        [flag, overlay_pid, overlay_start_time, recorder_pid, recorder_start_time]
+            if flag == "--watch-session" =>
+        {
+            Ok(Command::WatchSession {
+                overlay_pid: overlay_pid.parse().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "invalid overlay PID")
+                })?,
+                overlay_start_time: overlay_start_time.parse().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "invalid overlay start time")
+                })?,
+                recorder_pid: recorder_pid.parse().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "invalid recorder PID")
+                })?,
+                recorder_start_time: recorder_start_time.parse().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "invalid recorder start time")
+                })?,
+            })
+        }
+        [flag, owner_pid, owner_start_time] if flag == "--supervise-owner" => {
+            Ok(Command::SuperviseOwner {
+                owner_pid: owner_pid.parse().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "invalid owner PID")
+                })?,
+                owner_start_time: owner_start_time.parse().map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "invalid owner start time")
+                })?,
+            })
+        }
         [settings, command] if settings == "settings" && command == "get" => {
             Ok(Command::SettingsGet)
         }
@@ -120,6 +158,20 @@ mod tests {
     fn parses_every_command() {
         assert_eq!(parse_args(&[]).unwrap(), Command::Toggle);
         assert_eq!(parse_args(&["--status".into()]).unwrap(), Command::Status);
+        assert_eq!(
+            parse_args(&["--cancel-recording".into(), "42".into(), "99".into()]).unwrap(),
+            Command::CancelRecording {
+                recorder_pid: 42,
+                recorder_start_time: 99,
+            }
+        );
+        assert_eq!(
+            parse_args(&["--supervise-owner".into(), "42".into(), "99".into()]).unwrap(),
+            Command::SuperviseOwner {
+                owner_pid: 42,
+                owner_start_time: 99,
+            }
+        );
         assert_eq!(
             parse_args(&["settings".into(), "get".into()]).unwrap(),
             Command::SettingsGet

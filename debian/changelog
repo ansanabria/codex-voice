@@ -1,0 +1,8 @@
+codex-voice (0.2.0) unstable; urgency=medium
+
+  * Release the unified Codex Voice Debian package.
+  * Add persistent transcript history and focused-application paste automation.
+  * Support GNOME 46 and GNOME 50.
+  * Bundle and integrity-pin codex-asr 0.1.2.
+
+ -- codex-voice contributors <ansanabria@proton.me>  Tue, 21 Jul 2026 00:00:00 +0000
